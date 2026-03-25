@@ -2959,39 +2959,56 @@
   const introSub =
     "3機スタート。スコアとアイテムでライフ回復。1〜3面クリアを目指し、中ボス・大ボスを撃破せよ。";
 
-  btnStart.addEventListener("click", () => {
-    if (state === "title" || state === "over") {
-      const sel = document.querySelector('input[name="nd-ebullet"]:checked');
-      let t = sel ? parseInt(sel.value, 10) : 1;
-      if (t !== 0 && t !== 1 && t !== 2) t = 1;
-      enemyBulletTier = t;
-      try {
-        localStorage.setItem("nd_ebullet", String(enemyBulletTier));
-      } catch (_) {}
-      if (sensRange) {
-        const n = parseFloat(sensRange.value);
-        if (!Number.isNaN(n)) {
-          moveSensMul = Math.max(0.7, Math.min(2.5, n));
-          setSensUi(moveSensMul);
-          try {
-            localStorage.setItem("nd_sens", String(moveSensMul));
-          } catch (_) {}
-        }
+  let startGuard = 0;
+  function startGameFromTitle() {
+    if (!(state === "title" || state === "over")) return;
+    const now = performance.now();
+    if (now - startGuard < 350) return; // prevent double-trigger (pointerdown + click)
+    startGuard = now;
+
+    const sel = document.querySelector('input[name="nd-ebullet"]:checked');
+    let t = sel ? parseInt(sel.value, 10) : 1;
+    if (t !== 0 && t !== 1 && t !== 2) t = 1;
+    enemyBulletTier = t;
+    try {
+      localStorage.setItem("nd_ebullet", String(enemyBulletTier));
+    } catch (_) {}
+
+    if (sensRange) {
+      const n = parseFloat(sensRange.value);
+      if (!Number.isNaN(n)) {
+        moveSensMul = Math.max(0.7, Math.min(2.5, n));
+        setSensUi(moveSensMul);
+        try {
+          localStorage.setItem("nd_sens", String(moveSensMul));
+        } catch (_) {}
       }
-      snd.ensure();
-      resetGame();
-      state = "play";
-      snd.startBgm(1);
-      pausePanel.classList.add("hidden");
-      setPauseButtonVisible(true);
-      titleEl.textContent = "NEON DESCENT";
-      subEl.textContent = introSub;
-      subEl.style.display = "";
-      keysEl.style.display = "";
-      finalScoreEl.style.display = "none";
-      btnStart.textContent = "START";
-      overlay.classList.add("hidden");
     }
+
+    snd.ensure();
+    resetGame();
+    state = "play";
+    snd.startBgm(1);
+    pausePanel.classList.add("hidden");
+    setPauseButtonVisible(true);
+    titleEl.textContent = "NEON DESCENT";
+    subEl.textContent = introSub;
+    subEl.style.display = "";
+    keysEl.style.display = "";
+    finalScoreEl.style.display = "none";
+    btnStart.textContent = "START";
+    overlay.classList.add("hidden");
+  }
+
+  btnStart.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    startGameFromTitle();
+  });
+  btnStart.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    startGameFromTitle();
   });
 
   requestAnimationFrame(loop);

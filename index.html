@@ -127,6 +127,7 @@
     #overlay {
       position: absolute;
       inset: 0;
+      z-index: 30;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -3053,6 +3054,15 @@ if ("serviceWorker" in navigator) {
       if (reloaded) return;
       reloaded = true;
       window.location.reload();
+    });
+
+    // If SW tells us to reload (after activation), do it once.
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (reloaded) return;
+      if (event && event.data && event.data.type === "RELOAD") {
+        reloaded = true;
+        window.location.reload();
+      }
     });
   });
 }

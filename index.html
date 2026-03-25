@@ -738,9 +738,6 @@
     btnExitOverlay.style.display = show ? "" : "none";
   }
 
-  // Apply initial visibility immediately (before first frame)
-  updateTouchControlsVisibility();
-
   function exitToTitleAndTryClose() {
     // stop gameplay and return to title overlay
     state = "title";
@@ -1131,6 +1128,8 @@
   let comboTimer = 0;
   let spawnAcc = 0;
   let difficulty = 1;
+  // Now that state exists, apply initial touch-controls visibility safely
+  updateTouchControlsVisibility();
   let player = { x: W / 2, y: H - 78, w: 52, h: 46, invulnUntil: 0 };
   let stage = 1;
   let stageProgress = 0;

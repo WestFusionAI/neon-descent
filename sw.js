@@ -1,5 +1,5 @@
 /* Minimal service worker: cache app shell for offline-ish play */
-const CACHE = "neon-descent-v1";
+const CACHE = "neon-descent-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -19,6 +19,13 @@ self.addEventListener("activate", (event) => {
       Promise.all(keys.map((k) => (k === CACHE ? null : caches.delete(k))))
     ).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (!event.data) return;
+  if (event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {

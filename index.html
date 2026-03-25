@@ -3017,7 +3017,43 @@
 // PWA: cache for offline / install-like usage
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker
+      .register("./sw.js", { updateViaCache: "none" })
+      .then((reg) => {
+        // Ensure we check for updates soon after load
+        try { reg.update(); } catch (_) {}
+
+        function promptSwUpdate() {
+          if (reg.waiting) {
+            try {
+              reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            } catch (_) {}
+          }
+        }
+
+        reg.addEventListener("updatefound", () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener("statechange", () => {
+            if (nw.state === "installed") {
+              // If there's an existing SW controlling the page, this is an update
+              if (navigator.serviceWorker.controller) promptSwUpdate();
+            }
+          });
+        });
+
+        // If an update is already waiting, apply it
+        promptSwUpdate();
+      })
+      .catch(() => {});
+
+    // Reload when the new SW takes control (so UI matches latest)
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
   });
 }
   </script>

@@ -721,12 +721,25 @@
     if (!touchControlsEl) return;
     const on = touchUiActive() && state === "play";
     touchControlsEl.classList.toggle("touch-on", on);
+    // Force hide/show via inline style too (guards against stale CSS in browser cache)
+    if (on) {
+      touchControlsEl.style.display = "";
+      touchControlsEl.style.pointerEvents = "";
+      touchControlsEl.setAttribute("aria-hidden", "false");
+    } else {
+      touchControlsEl.style.display = "none";
+      touchControlsEl.style.pointerEvents = "none";
+      touchControlsEl.setAttribute("aria-hidden", "true");
+    }
   }
 
   function showExitOverlayButton(show) {
     if (!btnExitOverlay) return;
     btnExitOverlay.style.display = show ? "" : "none";
   }
+
+  // Apply initial visibility immediately (before first frame)
+  updateTouchControlsVisibility();
 
   function exitToTitleAndTryClose() {
     // stop gameplay and return to title overlay

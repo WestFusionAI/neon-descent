@@ -166,6 +166,8 @@
       line-height: 1.9;
     }
     #btn-start {
+      position: relative;
+      z-index: 40;
       font-family: "Orbitron", sans-serif;
       font-weight: 700;
       font-size: 14px;
@@ -178,6 +180,8 @@
       background: linear-gradient(90deg, var(--neon-cyan), #40ffd0);
       box-shadow: 0 0 24px rgba(0, 245, 255, 0.45);
       transition: transform 0.15s ease, box-shadow 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     #btn-start:hover {
       transform: scale(1.04);
@@ -606,6 +610,14 @@
         <h2>PAUSE</h2>
         <p>「再開」または ESC / P で続行</p>
         <button type="button" id="btn-resume">再開</button>
+        <div style="height:14px"></div>
+        <div class="sens-row" style="margin: 0 auto; max-width: 320px;">
+          <div class="sens-label">操作感度（移動スピード）</div>
+          <div class="sens-line">
+            <input id="sens-range-play" type="range" min="0.70" max="2.50" step="0.05" value="1.00" />
+            <div id="sens-val-play">×1.00</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -665,6 +677,8 @@
   const dailyBestEl = document.getElementById("daily-best");
   const sensRange = document.getElementById("sens-range");
   const sensVal = document.getElementById("sens-val");
+  const sensRangePlay = document.getElementById("sens-range-play");
+  const sensValPlay = document.getElementById("sens-val-play");
 
   let enemyBulletTier = 1;
   let moveSensMul = 1;
@@ -695,6 +709,8 @@
     const n = Math.max(0.7, Math.min(2.5, v));
     if (sensRange) sensRange.value = n.toFixed(2);
     if (sensVal) sensVal.textContent = "×" + n.toFixed(2);
+    if (sensRangePlay) sensRangePlay.value = n.toFixed(2);
+    if (sensValPlay) sensValPlay.textContent = "×" + n.toFixed(2);
   }
 
   (function initMoveSens() {
@@ -711,6 +727,18 @@
         const n = parseFloat(sensRange.value);
         if (!Number.isNaN(n)) {
           setSensUi(n);
+        }
+      });
+    }
+    if (sensRangePlay) {
+      sensRangePlay.addEventListener("input", () => {
+        const n = parseFloat(sensRangePlay.value);
+        if (!Number.isNaN(n)) {
+          setSensUi(n);
+          moveSensMul = Math.max(0.7, Math.min(2.5, n));
+          try {
+            localStorage.setItem("nd_sens", String(moveSensMul));
+          } catch (_) {}
         }
       });
     }
@@ -3001,16 +3029,18 @@
     overlay.classList.add("hidden");
   }
 
-  btnStart.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  function startFromEvent(e) {
+    if (e) {
+      // Keep it a user gesture, but avoid double triggers
+      e.preventDefault();
+      e.stopPropagation();
+    }
     startGameFromTitle();
-  });
-  btnStart.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    startGameFromTitle();
-  });
+  }
+  btnStart.addEventListener("pointerup", startFromEvent, { passive: false });
+  btnStart.addEventListener("touchend", startFromEvent, { passive: false });
+  btnStart.addEventListener("mouseup", startFromEvent);
+  btnStart.addEventListener("click", startFromEvent);
 
   requestAnimationFrame(loop);
 })();

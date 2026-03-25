@@ -1,0 +1,19 @@
+{
+  "name": "NEON DESCENT",
+  "short_name": "NEON",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#050510",
+  "theme_color": "#050510",
+  "description": "Canvas shooting game",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

@@ -484,15 +484,32 @@
       background: rgba(0, 245, 255, 0.35);
     }
     @media (max-width: 768px) {
-      #touch-controls {
-        display: flex;
-      }
+      #touch-controls.touch-on { display: flex; }
       #btn-pause {
         display: none !important;
       }
       #btn-option {
         display: none !important;
       }
+    }
+
+    .exit-btn {
+      margin-top: 12px;
+      font-family: "Orbitron", sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      padding: 12px 26px;
+      border: 1px solid rgba(255, 176, 32, 0.55);
+      border-radius: 4px;
+      cursor: pointer;
+      color: rgba(255, 220, 190, 0.95);
+      background: rgba(30, 14, 10, 0.75);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .exit-btn:active {
+      background: rgba(255, 176, 32, 0.18);
     }
     .keys-mobile {
       display: none;
@@ -604,6 +621,7 @@
           </div>
         </div>
         <button type="button" id="btn-start">START</button>
+        <button type="button" id="btn-exit-overlay" class="exit-btn" style="display:none;">終了（EXIT）</button>
         <div id="final-score" style="display: none;"></div>
       </div>
       <div id="pause-panel" class="hidden">
@@ -618,6 +636,7 @@
             <div id="sens-val-play">×1.00</div>
           </div>
         </div>
+        <button type="button" id="btn-exit" class="exit-btn">終了（EXIT）</button>
       </div>
     </div>
   </div>
@@ -666,6 +685,7 @@
   const pausePanel = document.getElementById("pause-panel");
   const btnResume = document.getElementById("btn-resume");
   const btnPause = document.getElementById("btn-pause");
+  const btnExit = document.getElementById("btn-exit");
   const buffsEl = document.getElementById("buffs");
   const stageNumEl = document.getElementById("stage-num");
   const livesEl = document.getElementById("lives");
@@ -675,10 +695,12 @@
   const touchOptionBtn = document.getElementById("touch-option");
   const touchPauseBtn = document.getElementById("touch-pause");
   const dailyBestEl = document.getElementById("daily-best");
+  const btnExitOverlay = document.getElementById("btn-exit-overlay");
   const sensRange = document.getElementById("sens-range");
   const sensVal = document.getElementById("sens-val");
   const sensRangePlay = document.getElementById("sens-range-play");
   const sensValPlay = document.getElementById("sens-val-play");
+  const touchControlsEl = document.getElementById("touch-controls");
 
   let enemyBulletTier = 1;
   let moveSensMul = 1;
@@ -693,6 +715,44 @@
 
   function touchUiActive() {
     return window.matchMedia("(max-width: 768px)").matches;
+  }
+
+  function updateTouchControlsVisibility() {
+    if (!touchControlsEl) return;
+    const on = touchUiActive() && state === "play";
+    touchControlsEl.classList.toggle("touch-on", on);
+  }
+
+  function showExitOverlayButton(show) {
+    if (!btnExitOverlay) return;
+    btnExitOverlay.style.display = show ? "" : "none";
+  }
+
+  function exitToTitleAndTryClose() {
+    // stop gameplay and return to title overlay
+    state = "title";
+    shooting = false;
+    optionHeld = false;
+    touchShooting = false;
+    touchOptionHeld = false;
+    resetJoystickVisual();
+    setPauseButtonVisible(false);
+    pausePanel.classList.add("hidden");
+    snd.stopBgm();
+    titleEl.textContent = "NEON DESCENT";
+    subEl.textContent = introSub;
+    subEl.style.display = "";
+    keysEl.style.display = "";
+    finalScoreEl.style.display = "none";
+    btnStart.textContent = "START";
+    showExitOverlayButton(false);
+    overlay.classList.remove("hidden");
+    updateTouchControlsVisibility();
+
+    // Try to close (Chrome will usually ignore unless opened by script)
+    try { window.close(); } catch (_) {}
+    // If it didn't close, at least show a hint
+    pushBanner("終了：タブを閉じる／戻るで離脱できます", "#ffaa44");
   }
 
   (function initEnemyBulletRadio() {
@@ -910,6 +970,7 @@
     resetJoystickVisual();
     setPauseButtonVisible(false);
     pausePanel.classList.remove("hidden");
+    updateTouchControlsVisibility();
   }
   function resumeGame() {
     if (state !== "paused") return;
@@ -917,6 +978,7 @@
     pausePanel.classList.add("hidden");
     setPauseButtonVisible(true);
     last = performance.now();
+    updateTouchControlsVisibility();
   }
 
   const keys = {};
@@ -1399,7 +1461,9 @@
         Math.floor(score) +
         (Math.floor(score) > prevB ? " ／ ★本日の最高スコア更新！" : "");
       btnStart.textContent = "もう一度";
+      showExitOverlayButton(true);
       overlay.classList.remove("hidden");
+      updateTouchControlsVisibility();
       return;
     }
     stageNumEl.textContent = String(stage);
@@ -1941,7 +2005,9 @@
             Math.floor(score) +
             (Math.floor(score) > prevB2 ? " ／ ★本日の最高スコア更新！" : "");
           btnStart.textContent = "RETRY";
+          showExitOverlayButton(true);
           overlay.classList.remove("hidden");
+          updateTouchControlsVisibility();
           break;
         }
       }
@@ -1987,7 +2053,9 @@
             Math.floor(score) +
             (Math.floor(score) > prevB2 ? " ／ ★本日の最高スコア更新！" : "");
           btnStart.textContent = "RETRY";
+          showExitOverlayButton(true);
           overlay.classList.remove("hidden");
+          updateTouchControlsVisibility();
           break;
         }
       }
@@ -2907,12 +2975,27 @@
   function loop(t) {
     const dt = Math.min(0.05, (t - last) / 1000);
     last = t;
+    updateTouchControlsVisibility();
     update(dt);
     draw();
     requestAnimationFrame(loop);
   }
 
   btnResume.addEventListener("click", () => resumeGame());
+  if (btnExit) {
+    btnExit.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitToTitleAndTryClose();
+    });
+  }
+  if (btnExitOverlay) {
+    btnExitOverlay.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitToTitleAndTryClose();
+    });
+  }
 
   btnPause.addEventListener("click", (e) => {
     e.preventDefault();
@@ -3026,7 +3109,9 @@
     keysEl.style.display = "";
     finalScoreEl.style.display = "none";
     btnStart.textContent = "START";
+    showExitOverlayButton(false);
     overlay.classList.add("hidden");
+    updateTouchControlsVisibility();
   }
 
   function startFromEvent(e) {

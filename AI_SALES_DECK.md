@@ -4,6 +4,7 @@
 - **デモ**: ブラウザで動く2Dシューティングゲーム「NEON DESCENT」
 - **目的**: 「AIを使って短期間でプロトタイプを作り、要件追加・調整・公開まで回す」実例として提示する
 - **公開URL（GitHub Pages / PWA対応）**: `https://westfusionai.github.io/neon-descent/`
+- **名刺QR用（タイトルで来訪メッセージ表示）**: `https://westfusionai.github.io/neon-descent/?from=card`（`ref=card` でも可）
 - **リポジトリ**: `https://github.com/WestFusionAI/neon-descent`
 
 ## 何が“営業に効く”ポイントか（AI活用の見せどころ）

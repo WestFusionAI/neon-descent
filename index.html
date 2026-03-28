@@ -165,6 +165,31 @@
       margin-bottom: 20px;
       line-height: 1.9;
     }
+    .card-visitor-notice {
+      max-width: 340px;
+      margin: 0 auto 14px;
+      padding: 12px 14px;
+      border: 1px solid rgba(0, 245, 255, 0.35);
+      border-radius: 8px;
+      background: rgba(8, 16, 40, 0.55);
+    }
+    .card-visitor-notice.hidden {
+      display: none;
+    }
+    .card-visitor-thanks {
+      font-size: 12px;
+      color: rgba(220, 230, 255, 0.92);
+      margin: 0 0 8px 0;
+      line-height: 1.55;
+    }
+    .card-visitor-credit {
+      font-size: 12px;
+      margin: 0;
+      color: rgba(255, 176, 32, 0.95);
+      font-family: "Orbitron", sans-serif;
+      letter-spacing: 0.05em;
+      line-height: 1.45;
+    }
     #btn-start {
       position: relative;
       z-index: 40;
@@ -590,6 +615,10 @@
       </div>
       <div id="overlay">
         <h1 id="title">NEON DESCENT</h1>
+        <div id="card-visitor-notice" class="card-visitor-notice hidden" aria-live="polite">
+          <p class="card-visitor-thanks">名刺のQRコードからお越しいただき、ありがとうございます。</p>
+          <p class="card-visitor-credit"><strong>AIエージェントを活用して制作しました。West</strong></p>
+        </div>
         <p id="sub">3機スタート。スコアとアイテムでライフ回復。1〜3面クリアを目指し、中ボス・大ボスを撃破せよ。</p>
         <div id="keys-help-wrap">
           <div class="keys keys-desktop">
@@ -701,6 +730,7 @@
   const sensRangePlay = document.getElementById("sens-range-play");
   const sensValPlay = document.getElementById("sens-val-play");
   const touchControlsEl = document.getElementById("touch-controls");
+  const cardVisitorNotice = document.getElementById("card-visitor-notice");
 
   let enemyBulletTier = 1;
   let moveSensMul = 1;
@@ -733,6 +763,24 @@
     }
   }
 
+  function isFromBusinessCard() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("from") === "card" || p.get("ref") === "card";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function refreshCardVisitorNotice() {
+    if (!cardVisitorNotice) return;
+    const show =
+      isFromBusinessCard() &&
+      state === "title" &&
+      !overlay.classList.contains("hidden");
+    cardVisitorNotice.classList.toggle("hidden", !show);
+  }
+
   function showExitOverlayButton(show) {
     if (!btnExitOverlay) return;
     btnExitOverlay.style.display = show ? "" : "none";
@@ -758,6 +806,7 @@
     showExitOverlayButton(false);
     overlay.classList.remove("hidden");
     updateTouchControlsVisibility();
+    refreshCardVisitorNotice();
 
     // Try to close (Chrome will usually ignore unless opened by script)
     try { window.close(); } catch (_) {}
@@ -1130,6 +1179,7 @@
   let difficulty = 1;
   // Now that state exists, apply initial touch-controls visibility safely
   updateTouchControlsVisibility();
+  refreshCardVisitorNotice();
   let player = { x: W / 2, y: H - 78, w: 52, h: 46, invulnUntil: 0 };
   let stage = 1;
   let stageProgress = 0;
@@ -1476,6 +1526,7 @@
       showExitOverlayButton(true);
       overlay.classList.remove("hidden");
       updateTouchControlsVisibility();
+      refreshCardVisitorNotice();
       return;
     }
     stageNumEl.textContent = String(stage);
@@ -2020,6 +2071,7 @@
           showExitOverlayButton(true);
           overlay.classList.remove("hidden");
           updateTouchControlsVisibility();
+          refreshCardVisitorNotice();
           break;
         }
       }
@@ -2068,6 +2120,7 @@
           showExitOverlayButton(true);
           overlay.classList.remove("hidden");
           updateTouchControlsVisibility();
+          refreshCardVisitorNotice();
           break;
         }
       }
@@ -3124,6 +3177,7 @@
     showExitOverlayButton(false);
     overlay.classList.add("hidden");
     updateTouchControlsVisibility();
+    refreshCardVisitorNotice();
   }
 
   function startFromEvent(e) {

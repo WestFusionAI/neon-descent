@@ -1,5 +1,5 @@
 /* Minimal service worker: cache app shell for offline-ish play */
-const CACHE = "neon-descent-v2";
+const CACHE = "neon-descent-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -44,11 +44,21 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin
   if (url.origin !== self.location.origin) return;
 
+  // GitHub Pages project URL is /repo/ or /repo — those requests must not be served
+  // from a stale cache entry that matched without query string (first paint / ?from=card).
+  const swPath = new URL(self.location.href).pathname;
+  const basePath = swPath.replace(/\/sw\.js$/i, "");
+  const p = url.pathname;
+  const isMainHtml =
+    p.endsWith("/index.html") ||
+    (basePath &&
+      (p === basePath || p === basePath + "/" || p === basePath + "/index.html"));
+
   const isAppShell =
-    url.pathname.endsWith("/index.html") ||
-    url.pathname.endsWith("/manifest.webmanifest") ||
-    url.pathname.endsWith("/sw.js") ||
-    url.pathname.endsWith("/icon.svg");
+    isMainHtml ||
+    p.endsWith("/manifest.webmanifest") ||
+    p.endsWith("/sw.js") ||
+    p.endsWith("/icon.svg");
 
   event.respondWith(
     isAppShell

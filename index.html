@@ -1074,9 +1074,24 @@
     const ny = (e.clientY - r.top) / r.height;
     return ny * H;
   }
+  function touchSafeYMaxCanvas() {
+    if (!touchUiActive() || !touchControlsEl) return H - 38;
+    if (touchControlsEl.classList.contains("touch-on") === false) return H - 38;
+    try {
+      const cr = canvas.getBoundingClientRect();
+      const tr = touchControlsEl.getBoundingClientRect();
+      const topPx = tr.top;
+      const ny = (topPx - cr.top) / cr.height;
+      const y = ny * H;
+      // Keep a visible gap above the control area
+      return Math.max(95 + player.h / 2, Math.min(H - 38, y - 22));
+    } catch (_) {
+      return H - 38;
+    }
+  }
   function clampPlayerPos() {
     const yMin = 95 + player.h / 2;
-    const yMax = H - 38;
+    const yMax = touchSafeYMaxCanvas();
     player.x = Math.max(player.w / 2 + 8, Math.min(W - player.w / 2 - 8, player.x));
     player.y = Math.max(yMin, Math.min(yMax, player.y));
   }
@@ -1184,7 +1199,7 @@
   // Now that state exists, apply initial touch-controls visibility safely
   updateTouchControlsVisibility();
   refreshCardVisitorNotice();
-  let player = { x: W / 2, y: H - 78, w: 52, h: 46, invulnUntil: 0 };
+  let player = { x: W / 2, y: H - 150, w: 52, h: 46, invulnUntil: 0 };
   let stage = 1;
   let stageProgress = 0;
   let nextLifeScore = 18000;
@@ -1448,7 +1463,8 @@
 
   function respawnPlayer() {
     player.x = W / 2;
-    player.y = H - 78;
+    player.y = H - (touchUiActive() ? 150 : 78);
+    clampPlayerPos();
     player.invulnUntil = performance.now() + 2700;
     bullets = [];
     enemyBullets = [];
@@ -1557,7 +1573,8 @@
     banners = [];
     stageFlash = 0;
     player.x = W / 2;
-    player.y = H - 78;
+    player.y = H - (touchUiActive() ? 150 : 78);
+    clampPlayerPos();
     player.invulnUntil = 0;
     bullets = [];
     enemyBullets = [];

@@ -639,8 +639,8 @@
         <div id="sens-row" class="sens-row">
           <div class="sens-label">操作感度（移動スピード）</div>
           <div class="sens-line">
-            <input id="sens-range" type="range" min="0.70" max="2.50" step="0.05" value="1.00" />
-            <div id="sens-val">×1.00</div>
+            <input id="sens-range" type="range" min="0.00" max="6.00" step="0.05" value="2.00" />
+            <div id="sens-val">×2.00</div>
           </div>
         </div>
         <button type="button" id="btn-start">START</button>
@@ -655,8 +655,8 @@
         <div class="sens-row" style="margin: 0 auto; max-width: 320px;">
           <div class="sens-label">操作感度（移動スピード）</div>
           <div class="sens-line">
-            <input id="sens-range-play" type="range" min="0.70" max="2.50" step="0.05" value="1.00" />
-            <div id="sens-val-play">×1.00</div>
+            <input id="sens-range-play" type="range" min="0.00" max="6.00" step="0.05" value="2.00" />
+            <div id="sens-val-play">×2.00</div>
           </div>
         </div>
         <button type="button" id="btn-exit" class="exit-btn">終了（EXIT）</button>
@@ -824,7 +824,7 @@
   })();
 
   function setSensUi(v) {
-    const n = Math.max(0.7, Math.min(2.5, v));
+    const n = Math.max(0, Math.min(6, v));
     if (sensRange) sensRange.value = n.toFixed(2);
     if (sensVal) sensVal.textContent = "×" + n.toFixed(2);
     if (sensRangePlay) sensRangePlay.value = n.toFixed(2);
@@ -832,13 +832,13 @@
   }
 
   (function initMoveSens() {
-    let v = 1;
+    let v = 2;
     try {
       const raw = localStorage.getItem("nd_sens");
-      const n = raw != null ? parseFloat(raw) : 1;
+      const n = raw != null ? parseFloat(raw) : 2;
       if (!Number.isNaN(n)) v = n;
     } catch (_) {}
-    moveSensMul = Math.max(0.7, Math.min(2.5, v));
+    moveSensMul = Math.max(0, Math.min(6, v));
     setSensUi(moveSensMul);
     if (sensRange) {
       sensRange.addEventListener("input", () => {
@@ -853,7 +853,7 @@
         const n = parseFloat(sensRangePlay.value);
         if (!Number.isNaN(n)) {
           setSensUi(n);
-          moveSensMul = Math.max(0.7, Math.min(2.5, n));
+          moveSensMul = Math.max(0, Math.min(6, n));
           try {
             localStorage.setItem("nd_sens", String(moveSensMul));
           } catch (_) {}
@@ -3196,7 +3196,7 @@
     if (sensRange) {
       const n = parseFloat(sensRange.value);
       if (!Number.isNaN(n)) {
-        moveSensMul = Math.max(0.7, Math.min(2.5, n));
+        moveSensMul = Math.max(0, Math.min(6, n));
         setSensUi(moveSensMul);
         try {
           localStorage.setItem("nd_sens", String(moveSensMul));

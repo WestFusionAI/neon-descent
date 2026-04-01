@@ -413,10 +413,10 @@
       position: absolute;
       inset: 0;
       z-index: 0;
-      border-radius: 50%;
-      border: 2px solid rgba(0, 245, 255, 0.38);
-      background: rgba(8, 18, 42, 0.78);
-      box-shadow: inset 0 0 28px rgba(0, 245, 255, 0.07);
+      border-radius: 16px;
+      border: 1px solid rgba(0, 245, 255, 0.28);
+      background: rgba(8, 18, 42, 0.42);
+      box-shadow: inset 0 0 24px rgba(0, 245, 255, 0.06);
     }
     .touch-joystick-cross {
       position: absolute;
@@ -449,14 +449,14 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 54px;
-      height: 54px;
-      margin-left: -27px;
-      margin-top: -27px;
+      width: 22px;
+      height: 22px;
+      margin-left: -11px;
+      margin-top: -11px;
       border-radius: 50%;
-      border: 2px solid rgba(0, 245, 255, 0.7);
-      background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.28), rgba(0, 200, 255, 0.12) 55%, rgba(4, 12, 30, 0.95));
-      box-shadow: 0 0 18px rgba(0, 245, 255, 0.35);
+      border: 1px solid rgba(0, 245, 255, 0.62);
+      background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.35), rgba(0, 200, 255, 0.12) 55%, rgba(4, 12, 30, 0.92));
+      box-shadow: 0 0 14px rgba(0, 245, 255, 0.32);
       pointer-events: none;
       z-index: 2;
       transform: translate(0, 0);
@@ -554,14 +554,8 @@
     }
     @media (max-width: 380px) {
       .touch-joystick {
-        width: 128px;
-        height: 128px;
-      }
-      .touch-joystick-knob {
-        width: 46px;
-        height: 46px;
-        margin-left: -23px;
-        margin-top: -23px;
+        width: 142px;
+        height: 110px;
       }
       .touch-actions {
         min-width: 92px;
@@ -601,7 +595,7 @@
       <button type="button" id="btn-option" class="hidden">OP<br />砲</button>
       <div id="touch-controls" aria-hidden="true">
         <div class="touch-inner">
-          <div class="touch-joystick" id="touch-joystick" role="application" aria-label="移動スティック（中央から倒す）">
+          <div class="touch-joystick" id="touch-joystick" role="application" aria-label="移動パッド（指の動きで相対操作）">
             <div class="touch-joystick-base"></div>
             <div class="touch-joystick-cross" aria-hidden="true"></div>
             <div class="touch-joystick-knob" id="touch-joystick-knob"></div>
@@ -738,6 +732,11 @@
   let joyX = 0;
   let joyY = 0;
   let joyPointerId = null;
+  let joyLastX = 0;
+  let joyLastY = 0;
+  let joyLastMoveAt = 0;
+  let joyOriginLocalX = 0;
+  let joyOriginLocalY = 0;
   const touchJoystick = document.getElementById("touch-joystick");
   const touchJoystickKnob = document.getElementById("touch-joystick-knob");
   let touchShooting = false;
@@ -870,37 +869,40 @@
     if (touchJoystickKnob) touchJoystickKnob.style.transform = "";
   }
 
-  function joystickFromPointer(e) {
+  function clamp01(v) {
+    return Math.max(-1, Math.min(1, v));
+  }
+
+  // Trackpad-like: movement is based on pointer delta (mouse-like).
+  // If finger stops moving (no pointermove), we neutralize shortly after.
+  function joystickFromPointerDelta(e) {
     if (!touchJoystick || !touchJoystickKnob) return;
     const r = touchJoystick.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    const maxR = r.width * 0.38;
-    const dead = Math.max(3, r.width * 0.032);
-    let dx = e.clientX - cx;
-    let dy = e.clientY - cy;
-    const dist = Math.hypot(dx, dy);
-    if (dist < dead) {
-      joyX = 0;
-      joyY = 0;
-      touchJoystickKnob.style.transform = "";
-      return;
-    }
-    if (dist > maxR) {
-      dx = (dx / dist) * maxR;
-      dy = (dy / dist) * maxR;
-    }
-    let jx = dx / maxR;
-    let jy = dy / maxR;
-    const len = Math.hypot(jx, jy);
-    if (len > 1e-4) {
-      const snap = Math.pow(len, 0.76) / len;
-      jx *= snap;
-      jy *= snap;
-    }
-    joyX = jx;
-    joyY = jy;
-    touchJoystickKnob.style.transform = "translate(" + dx + "px, " + dy + "px)";
+
+    // Convert screen movement into normalized control.
+    const scaleX = Math.max(22, r.width * 0.18);
+    const scaleY = Math.max(18, r.height * 0.22);
+    const dx = e.clientX - joyLastX;
+    const dy = e.clientY - joyLastY;
+    joyLastX = e.clientX;
+    joyLastY = e.clientY;
+    joyLastMoveAt = performance.now();
+
+    const tx = clamp01(dx / scaleX);
+    const ty = clamp01(dy / scaleY);
+    // Smooth a bit so tiny jitters don't jerk the ship.
+    joyX = joyX * 0.25 + tx * 0.75;
+    joyY = joyY * 0.25 + ty * 0.75;
+
+    // Small visual: show origin + slight nudge in movement direction.
+    const kx = clamp01(joyX) * (r.width * 0.22);
+    const ky = clamp01(joyY) * (r.height * 0.22);
+    touchJoystickKnob.style.transform =
+      "translate(" +
+      (joyOriginLocalX + kx - r.width / 2) +
+      "px, " +
+      (joyOriginLocalY + ky - r.height / 2) +
+      "px)";
   }
 
   function endJoystickTouch(e) {
@@ -1843,6 +1845,24 @@
     if (mainFire && now - lastShot > shotIntervalMs()) {
       lastShot = now;
       firePlayerShots();
+    }
+    // Trackpad joystick neutralization: if finger stops moving, return to neutral.
+    if (touchUiActive() && joyPointerId !== null && now - joyLastMoveAt > 90) {
+      joyX = 0;
+      joyY = 0;
+      if (touchJoystickKnob && touchJoystick) {
+        try {
+          const r = touchJoystick.getBoundingClientRect();
+          touchJoystickKnob.style.transform =
+            "translate(" +
+            (joyOriginLocalX - r.width / 2) +
+            "px, " +
+            (joyOriginLocalY - r.height / 2) +
+            "px)";
+        } catch (_) {
+          touchJoystickKnob.style.transform = "";
+        }
+      }
     }
     const opFire = keys["KeyJ"] || keys["KeyX"] || optionHeld || (touchUiActive() && touchOptionHeld);
     if (opFire) fireOptionShots();
@@ -3079,15 +3099,37 @@
       if (state !== "play") return;
       if (joyPointerId !== null) return;
       joyPointerId = e.pointerId;
+      joyLastX = e.clientX;
+      joyLastY = e.clientY;
+      joyLastMoveAt = performance.now();
+      try {
+        const r = touchJoystick.getBoundingClientRect();
+        joyOriginLocalX = Math.max(0, Math.min(r.width, e.clientX - r.left));
+        joyOriginLocalY = Math.max(0, Math.min(r.height, e.clientY - r.top));
+      } catch (_) {
+        joyOriginLocalX = 0;
+        joyOriginLocalY = 0;
+      }
       try {
         touchJoystick.setPointerCapture(e.pointerId);
       } catch (_) {}
-      joystickFromPointer(e);
+      // neutral at touch start (trackpad style)
+      if (touchJoystickKnob) {
+        const r = touchJoystick.getBoundingClientRect();
+        touchJoystickKnob.style.transform =
+          "translate(" +
+          (joyOriginLocalX - r.width / 2) +
+          "px, " +
+          (joyOriginLocalY - r.height / 2) +
+          "px)";
+      }
+      joyX = 0;
+      joyY = 0;
     });
     touchJoystick.addEventListener("pointermove", (e) => {
       if (state !== "play") return;
       if (joyPointerId !== e.pointerId) return;
-      joystickFromPointer(e);
+      joystickFromPointerDelta(e);
     });
     touchJoystick.addEventListener("pointerup", endJoystickTouch);
     touchJoystick.addEventListener("pointercancel", endJoystickTouch);

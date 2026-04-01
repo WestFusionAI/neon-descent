@@ -640,7 +640,7 @@
           <div class="sens-label">操作感度（移動スピード）</div>
           <div class="sens-line">
             <input id="sens-range" type="range" min="0.00" max="6.00" step="0.05" value="2.00" />
-            <div id="sens-val">×2.00</div>
+            <div id="sens-val">×1.00</div>
           </div>
         </div>
         <button type="button" id="btn-start">START</button>
@@ -656,7 +656,7 @@
           <div class="sens-label">操作感度（移動スピード）</div>
           <div class="sens-line">
             <input id="sens-range-play" type="range" min="0.00" max="6.00" step="0.05" value="2.00" />
-            <div id="sens-val-play">×2.00</div>
+            <div id="sens-val-play">×1.00</div>
           </div>
         </div>
         <button type="button" id="btn-exit" class="exit-btn">終了（EXIT）</button>
@@ -727,7 +727,7 @@
   const cardVisitorNotice = document.getElementById("card-visitor-notice");
 
   let enemyBulletTier = 1;
-  let moveSensMul = 1;
+  let moveSensMul = 2;
 
   let joyX = 0;
   let joyY = 0;
@@ -825,10 +825,12 @@
 
   function setSensUi(v) {
     const n = Math.max(0, Math.min(6, v));
+    // UI display: internal ×2.00 (new default) = ×1.00 shown
+    const disp = n / 2;
     if (sensRange) sensRange.value = n.toFixed(2);
-    if (sensVal) sensVal.textContent = "×" + n.toFixed(2);
+    if (sensVal) sensVal.textContent = "×" + disp.toFixed(2);
     if (sensRangePlay) sensRangePlay.value = n.toFixed(2);
-    if (sensValPlay) sensValPlay.textContent = "×" + n.toFixed(2);
+    if (sensValPlay) sensValPlay.textContent = "×" + disp.toFixed(2);
   }
 
   (function initMoveSens() {

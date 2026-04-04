@@ -1699,13 +1699,15 @@
     if (now < (e._nextShot || 0)) return;
     const base = { grunt: 2150, diver: 1450, brute: 820, flanker: 980 }[e.kind] || 2000;
     const mult = 1 / (1 + difficulty * 0.08 + stage * 0.055);
-    const tierMul = enemyBulletTier === 2 ? 0.76 : 1;
+    // tier1=標準は間隔を伸ばして弾数を抑制、tier2=多めは従来比で相対的に多弾のまま
+    const tierMul = enemyBulletTier === 2 ? 0.76 * 1.32 : 1.32;
     e._nextShot = now + base * mult * tierMul * (0.85 + Math.random() * 0.3);
     snd.enemyShoot();
     const sp = 205 + difficulty * 24 + stage * 14;
     const oy = e.kind === "brute" ? 12 : 5;
     fireEnemyBullet(e.x, e.y + oy, player.x, player.y, sp, 0.11);
-    if (e.kind === "brute" && Math.random() < 0.42) {
+    const bruteExtra = enemyBulletTier === 2 ? 0.42 : 0.28;
+    if (e.kind === "brute" && Math.random() < bruteExtra) {
       fireEnemyBullet(e.x - 14, e.y + oy + 4, player.x - 20, player.y + 10, sp * 0.95, 0.18);
     }
   }
@@ -1924,10 +1926,13 @@
           e._bossShotAcc = (e._bossShotAcc || 0) + dt;
           const st = Math.max(1, stage);
           const bossTierMul = enemyBulletTier === 2 ? 0.86 : 1;
+          const bossStandardEase = enemyBulletTier === 2 ? 1 : 1.22;
           const intv =
             (e.bossKind === "final"
               ? 0.52 + 0.42 / Math.sqrt(st)
-              : 0.7 + 0.36 / Math.sqrt(st)) * bossTierMul;
+              : 0.7 + 0.36 / Math.sqrt(st)) *
+            bossTierMul *
+            bossStandardEase;
           if (e._bossShotAcc >= intv) {
             e._bossShotAcc = 0;
             snd.enemyShoot();

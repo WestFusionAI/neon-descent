@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1117" />
+  <title>ペットレスキュー — デモ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --text: #e6edf3;
+      --muted: rgba(230, 237, 243, 0.65);
+      --accent: #58a6ff;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      min-height: 100dvh;
+      overflow: hidden;
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      touch-action: none;
+    }
+    #app {
+      position: fixed;
+      inset: 0;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+      min-height: 50dvh;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .screen {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      background: linear-gradient(165deg, #121a28 0%, var(--bg) 45%);
+      z-index: 2;
+    }
+    .screen.hidden { display: none; }
+    .screen.centered { justify-content: center; }
+    h1 {
+      font-size: clamp(1.4rem, 5vw, 1.85rem);
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 0.35rem;
+      letter-spacing: 0.02em;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.92rem;
+      text-align: center;
+      margin-bottom: 1.25rem;
+      max-width: 22rem;
+      line-height: 1.5;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      width: 100%;
+      max-width: 22rem;
+      margin-top: 0.5rem;
+    }
+    button, .btn-link {
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn-primary {
+      background: linear-gradient(180deg, #388bfd 0%, var(--accent) 100%);
+      color: #fff;
+      box-shadow: 0 4px 0 #1f4f99;
+      width: 100%;
+      max-width: 22rem;
+    }
+    .btn-primary:active { transform: translateY(2px); box-shadow: 0 2px 0 #1f4f99; }
+    .btn-secondary {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid rgba(88, 166, 255, 0.35);
+    }
+    .btn-danger-outline {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid rgba(248, 81, 73, 0.5);
+    }
+    .stage-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      width: 100%;
+      max-width: 24rem;
+      margin-top: 0.5rem;
+    }
+    @media (min-width: 480px) {
+      .stage-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .stage-card {
+      text-align: left;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid rgba(230, 237, 243, 0.08);
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+    .stage-card:hover { border-color: rgba(88, 166, 255, 0.4); }
+    .stage-card strong { display: block; font-size: 0.98rem; margin-bottom: 4px; color: var(--accent); }
+    .stage-card span { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+    .hud {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding: max(8px, env(safe-area-inset-top)) 10px 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 3;
+      font-size: clamp(11px, 2.8vw, 13px);
+      font-weight: 700;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.75);
+    }
+    .hud span { background: rgba(13,17,23,0.72); padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08); }
+    .hud-actions {
+      pointer-events: auto;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: 100%;
+    }
+    .hud-actions button {
+      font-size: clamp(11px, 2.8vw, 13px);
+      padding: 8px 12px;
+      border-radius: 999px;
+    }
+    #touch-pad {
+      position: absolute;
+      bottom: max(72px, calc(env(safe-area-inset-bottom) + 56px));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 4;
+      display: none;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    #touch-pad.visible { display: flex; }
+    #touch-pad button {
+      width: 56px;
+      height: 48px;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 900;
+      border: 1px solid rgba(88, 166, 255, 0.45);
+      background: rgba(22, 27, 34, 0.92);
+      color: var(--accent);
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    #touch-pad button:active { background: rgba(88, 166, 255, 0.2); }
+    .howto {
+      width: 100%;
+      max-width: 22rem;
+      margin: 0 0 1rem;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(22, 27, 34, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.55;
+      text-align: left;
+    }
+    .howto strong { color: var(--text); }
+    .howto ol { margin: 6px 0 0 1.1rem; padding: 0; }
+    .howto li { margin-bottom: 4px; }
+    .hint-box {
+      position: absolute;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      left: 10px;
+      right: 10px;
+      z-index: 3;
+      font-size: clamp(11px, 2.6vw, 13px);
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.45;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+    #back-link {
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+      z-index: 10;
+    }
+    #back-link a {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(22,27,34,0.92);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1px solid rgba(88, 166, 255, 0.35);
+    }
+    .shop-list { width: 100%; max-width: 22rem; margin-top: 8px; }
+    .shop-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: var(--panel);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.88rem;
+    }
+    .shop-item button { flex-shrink: 0; padding: 8px 12px; font-size: 0.82rem; }
+    .result-stats { text-align: center; margin: 12px 0; line-height: 1.7; color: var(--muted); font-size: 0.92rem; }
+    .result-stats strong { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div id="back-link"><a href="../../index.html">← 一覧</a></div>
+  <div id="app">
+    <div id="canvas-wrap">
+      <canvas id="game" aria-label="ゲーム画面"></canvas>
+      <div id="hud" class="hud hidden">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <span id="hud-stage"></span>
+          <span id="hud-floor"></span>
+          <span id="hud-pets"></span>
+          <span id="hud-time"></span>
+        </div>
+        <div class="hud-actions">
+          <button type="button" class="btn-secondary" id="btn-slow" title="購入済みのとき使用">遅くするマシンを投げる</button>
+          <button type="button" class="btn-primary" id="btn-escape">ヘリで脱出</button>
+        </div>
+      </div>
+      <p id="play-hint" class="hint-box hidden"></p>
+      <div id="touch-pad" aria-label="移動ボタン">
+        <button type="button" id="pad-left" aria-label="左へ">◀</button>
+        <button type="button" id="pad-up" aria-label="階段で上へ">↑</button>
+        <button type="button" id="pad-right" aria-label="右へ">▶</button>
+      </div>
+
+      <div id="screen-title" class="screen centered">
+        <h1>ペットレスキュー</h1>
+        <p class="subtitle">災害が下から迫るビルで、ペットを助けてヘリで脱出するデモ版です。上の階ほどレアな子がいますが、危険も早まります。</p>
+        <div class="howto">
+          <strong>遊び方</strong>
+          <ol>
+            <li><strong>ミッションを選ぶ</strong> → ステージ（地震など）をタップ。</li>
+            <li>水色の丸が隊員。<strong>右端の縦線が階段</strong>。右端まで行って <strong>↑（または画面の ↑ ボタン）</strong> で上の階へ。</li>
+            <li>ペットの絵文字に<strong>近づくと自動で救出</strong>。</li>
+            <li>下から災害が迫る前に <strong>ヘリで脱出</strong> を押すとクリア（デモ）。</li>
+          </ol>
+          <p style="margin-top:8px;"><strong>起動</strong>：この <code style="font-size:0.78rem;">index.html</code> をブラウザ（Chrome / Edge など）で開いてください。フォルダをダブルクリックするだけでは開けない場合は、ファイルをブラウザのウィンドウにドラッグ＆ドロップしてください。</p>
+        </div>
+        <button type="button" class="btn-primary" id="to-stages">ミッションを選ぶ</button>
+        <div class="btn-row">
+          <button type="button" class="btn-secondary" id="to-shop">ショップ（デモ）</button>
+        </div>
+      </div>
+
+      <div id="screen-stages" class="screen hidden">
+        <h1>出動ステージ</h1>
+        <p class="subtitle">5種類の災害。デモでは挙動は共通で、見た目と速度倍率だけ変えています。</p>
+        <div class="stage-grid" id="stage-grid"></div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button type="button" class="btn-secondary" id="from-stages-title">タイトルへ</button>
+        </div>
+      </div>
+
+      <div id="screen-shop" class="screen hidden">
+        <h1>ショップ（デモ）</h1>
+        <p class="subtitle">コインでアイテムを買うと、ミッション中に「投げる」で使えます（デモは1種類のみ接続）。所持: <strong id="coin-display">0</strong> コイン</p>
+        <div class="shop-list" id="shop-list"></div>
+        <div class="btn-row">
+          <button type="button" class="btn-secondary" id="from-shop-title">戻る</button>
+        </div>
+      </div>
+
+      <div id="screen-result" class="screen centered hidden">
+        <h1 id="result-title"></h1>
+        <div class="result-stats" id="result-body"></div>
+        <button type="button" class="btn-primary" id="result-again">もう一度</button>
+        <div class="btn-row">
+          <button type="button" class="btn-secondary" id="result-shop">ショップ</button>
+          <button type="button" class="btn-secondary" id="result-title-btn">タイトル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const STAGES = [
+    { id: "quake", name: "地震", place: "3階建ての家", hazard: "外壁崩落", speed: 1, colors: { hazardFill: "rgba(139, 115, 85, 0.55)", sky: "#87a8c4" } },
+    { id: "kaiju", name: "怪獣", place: "ビルディング", hazard: "怪獣の爪", speed: 1.15, colors: { hazardFill: "rgba(107, 45, 92, 0.5)", sky: "#4a3060" } },
+    { id: "tsunami", name: "津波", place: "ホテル", hazard: "水位上昇", speed: 1.25, colors: { hazardFill: "rgba(30, 107, 140, 0.5)", sky: "#5a8faf" } },
+    { id: "fire", name: "火事", place: "建物内", hazard: "炎", speed: 1.1, colors: { hazardFill: "rgba(244, 96, 54, 0.55)", sky: "#3d2a28" } },
+    { id: "crane", name: "クレーン（悪者）", place: "建設現場", hazard: "クレーン追跡", speed: 1.2, colors: { hazardFill: "rgba(90, 90, 95, 0.55)", sky: "#6a7a88" } },
+  ];
+
+  const PET_TIERS = [
+    { maxFloor: 0, label: "コモン", pets: [{ emoji: "🐹", name: "ハムスター" }, { emoji: "🦔", name: "ハリネズミ" }] },
+    { maxFloor: 1, label: "ノーマル", pets: [{ emoji: "🐕", name: "犬" }, { emoji: "🐈", name: "猫" }, { emoji: "🐦", name: "鳥" }] },
+    { maxFloor: 2, label: "レア", pets: [{ emoji: "✨🐕", name: "光る犬" }, { emoji: "✨🐈", name: "光る猫" }] },
+    { maxFloor: 3, label: "超レア", pets: [{ emoji: "✨🐕‍🪽", name: "羽の光る犬" }] },
+    { maxFloor: 99, label: "伝説", pets: [{ emoji: "🐉", name: "ドラゴン" }, { emoji: "✨🐺", name: "光る狼" }] },
+  ];
+
+  function tierForFloor(floorIndex) {
+    let t = PET_TIERS[0];
+    for (let i = 0; i < PET_TIERS.length; i++) {
+      if (floorIndex <= PET_TIERS[i].maxFloor) { t = PET_TIERS[i]; break; }
+    }
+    return t;
+  }
+
+  function randomPetForFloor(floorIndex) {
+    const t = tierForFloor(floorIndex);
+    return t.pets[Math.floor(Math.random() * t.pets.length)];
+  }
+
+  const STORAGE_KEY = "pet_rescue_demo_v1";
+  function loadSave() {
+    try {
+      const j = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      return {
+        coins: Number(j.coins) || 0,
+        hasSlowMachine: !!j.hasSlowMachine,
+      };
+    } catch (_) {
+      return { coins: 0, hasSlowMachine: false };
+    }
+  }
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
+  }
+  let save = loadSave();
+
+  let currentStage = null;
+  let gameState = "title";
+
+  const FLOORS = 5;
+  const TIME_LIMIT_SEC = 75;
+  let hazardY = 0;
+  let hazardSpeed = 0;
+  let timeLeft = TIME_LIMIT_SEC;
+  let lastTs = 0;
+  let player = { floor: 0, x: 0.5, facing: 1 };
+  let pets = [];
+  let keys = {};
+  let slowBuffUntil = 0;
+  let anim = 0;
+
+  function resize() {
+    const r = canvas.parentElement.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(r.width * dpr);
+    canvas.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+
+  function showScreen(id) {
+    document.querySelectorAll(".screen").forEach((el) => el.classList.add("hidden"));
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("hidden");
+  }
+
+  function setPlayUI(visible) {
+    document.getElementById("hud").classList.toggle("hidden", !visible);
+    document.getElementById("play-hint").classList.toggle("hidden", !visible);
+    document.getElementById("touch-pad").classList.toggle("visible", !!visible);
+  }
+
+  const STAIR_X = 0.88;
+  const MOVE_STEP = 0.12;
+  const MARGIN_X = 0.04;
+
+  function moveStep(dir) {
+    if (gameState !== "play") return;
+    player.facing = dir >= 0 ? 1 : -1;
+    player.x = Math.max(MARGIN_X, Math.min(1 - MARGIN_X, player.x + dir * MOVE_STEP));
+    if (player.floor < FLOORS - 1 && player.x >= STAIR_X && dir > 0) {
+      player.floor += 1;
+      player.x = 0.2;
+    }
+    tryRescueNearby();
+  }
+
+  function tryClimb() {
+    if (gameState !== "play") return;
+    if (player.floor < FLOORS - 1 && player.x >= STAIR_X) {
+      player.floor += 1;
+      player.x = 0.2;
+      tryRescueNearby();
+    }
+  }
+
+  function buildStageGrid() {
+    const grid = document.getElementById("stage-grid");
+    grid.innerHTML = "";
+    STAGES.forEach((s) => {
+      const div = document.createElement("div");
+      div.className = "stage-card";
+      div.innerHTML = `<strong>${s.name}</strong><span>${s.place} · ${s.hazard}（速度×${s.speed}）</span>`;
+      div.addEventListener("click", () => startStage(s));
+      grid.appendChild(div);
+    });
+  }
+
+  const SHOP_ITEMS = [
+    { id: "slow", name: "遅くするマシン", price: 80, desc: "災害の進行を一時的に遅くする（投げる）" },
+    { id: "time", name: "時間延長", price: 50, desc: "デモ未実装（今後）" },
+    { id: "cage", name: "大きなケージ", price: 120, desc: "デモ未実装（今後）" },
+  ];
+
+  function refreshShopUI() {
+    document.getElementById("coin-display").textContent = String(save.coins);
+    const list = document.getElementById("shop-list");
+    list.innerHTML = "";
+    SHOP_ITEMS.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "shop-item";
+      const left = document.createElement("div");
+      left.innerHTML = `<strong>${item.name}</strong><br><span style="color:var(--muted);font-size:0.82rem;">${item.desc}</span>`;
+      const btn = document.createElement("button");
+      btn.className = "btn-primary";
+      btn.style.width = "auto";
+      if (item.id === "slow" && save.hasSlowMachine) {
+        btn.textContent = "所持済み";
+        btn.disabled = true;
+      } else if (item.id !== "slow") {
+        btn.textContent = `${item.price}（準備中）`;
+        btn.disabled = true;
+      } else {
+        btn.textContent = `${item.price} コイン`;
+        btn.addEventListener("click", () => {
+          if (save.coins >= item.price) {
+            save.coins -= item.price;
+            save.hasSlowMachine = true;
+            saveState();
+            refreshShopUI();
+          }
+        });
+      }
+      row.appendChild(left);
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
+
+  function startStage(stage) {
+    currentStage = stage;
+    gameState = "play";
+    showScreen("");
+    setPlayUI(true);
+    hazardY = 0;
+    hazardSpeed = 18 * stage.speed;
+    timeLeft = TIME_LIMIT_SEC;
+    player = { floor: 0, x: 0.35, facing: 1 };
+    slowBuffUntil = 0;
+    pets = [];
+    for (let f = 0; f < FLOORS; f++) {
+      const count = f <= 1 ? 2 : f === 2 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
+        const p = randomPetForFloor(f);
+        pets.push({
+          floor: f,
+          x: 0.15 + Math.random() * 0.7,
+          emoji: p.emoji,
+          name: p.name,
+          rescued: false,
+        });
+      }
+    }
+    document.getElementById("hud-stage").textContent = stage.name;
+    document.getElementById("play-hint").textContent =
+      "下の ◀ ↑ ▶ でも操作できます。キー: ←→ 移動 / 右端で ↑ または W で上の階。いつでも「ヘリで脱出」で成功（デモ）。";
+    document.getElementById("btn-slow").style.display = save.hasSlowMachine ? "inline-block" : "none";
+    resize();
+    function beginPlay() {
+      resize();
+      const cssH = canvas.getBoundingClientRect().height;
+      const cssW = canvas.getBoundingClientRect().width;
+      if (cssH < 80 || cssW < 80) {
+        requestAnimationFrame(beginPlay);
+        return;
+      }
+      lastTs = performance.now();
+      update(0);
+      stepSimulation(0);
+      draw();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(beginPlay);
+  }
+
+  function floorY(canvasH, floorIndex) {
+    const top = canvasH * 0.1;
+    const bottom = canvasH * 0.88;
+    const gap = (bottom - top) / (FLOORS - 1);
+    return bottom - floorIndex * gap;
+  }
+
+  function platformLeft(w) {
+    return w * 0.08;
+  }
+  function platformRight(w) {
+    return w * 0.92;
+  }
+
+  function draw() {
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    const sky = currentStage?.colors.sky || "#333";
+    const hzFill = currentStage?.colors.hazardFill || "rgba(80,80,90,0.5)";
+
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, sky);
+    g.addColorStop(1, "#0a0e14");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    for (let i = 0; i < 6; i++) {
+      ctx.fillRect((w / 6) * i + (anim % 40) * 0.2, 0, 1, h);
+    }
+
+    const pxL = platformLeft(w);
+    const pxR = platformRight(w);
+
+    for (let f = 0; f < FLOORS; f++) {
+      const y = floorY(h, f);
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(pxL, y);
+      ctx.lineTo(pxR, y);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(22,27,34,0.65)";
+      ctx.fillRect(pxL, y, pxR - pxL, 10);
+
+      const floorLabel = f === FLOORS - 1 ? "屋上・ヘリ" : `${f + 1}階`;
+      ctx.font = "bold 12px 'Noto Sans JP',sans-serif";
+      ctx.fillStyle = "rgba(230,237,243,0.9)";
+      ctx.textAlign = "left";
+      ctx.fillText(floorLabel, pxL + 4, y - 6);
+
+      if (f < FLOORS - 1) {
+        const yNext = floorY(h, f + 1);
+        ctx.strokeStyle = "rgba(255, 200, 120, 0.85)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(pxR - 5, y);
+        ctx.lineTo(pxR - 5, yNext);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255, 200, 120, 0.95)";
+        ctx.font = "bold 11px 'Noto Sans JP',sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText("階段↑", pxR - 10, (y + yNext) * 0.5);
+      }
+    }
+
+    const helipadY = floorY(h, FLOORS - 1);
+    ctx.fillStyle = "rgba(63, 185, 80, 0.35)";
+    ctx.fillRect(pxR - 72, helipadY - 30, 68, 30);
+    ctx.strokeStyle = "rgba(63, 185, 80, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pxR - 72, helipadY - 30, 68, 30);
+    ctx.fillStyle = "#3fb950";
+    ctx.font = "bold 11px 'Noto Sans JP',sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("脱出", pxR - 38, helipadY - 10);
+
+    ctx.fillStyle = hzFill;
+    ctx.fillRect(0, h - hazardY, w, hazardY);
+
+    const hazardTop = h - hazardY;
+    if (hazardY > 2) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, hazardTop);
+      ctx.lineTo(w, hazardTop);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255, 80, 80, 0.95)";
+      ctx.font = "bold 13px 'Noto Sans JP',sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("← 災害（これが届くと失敗）", 10, Math.max(24, hazardTop - 8));
+    } else {
+      ctx.fillStyle = "rgba(255, 200, 100, 0.9)";
+      ctx.font = "bold 12px 'Noto Sans JP',sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("下から災害がせり上がります", 10, h - 16);
+    }
+
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(0, hazardTop - 5, w, 5);
+
+    if (currentStage?.id === "kaiju") {
+      ctx.fillStyle = "rgba(107, 45, 92, 0.4)";
+      ctx.beginPath();
+      ctx.arc(w * 0.5 + Math.sin(anim * 0.04) * 40, hazardTop - 18, 36, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    pets.forEach((p) => {
+      if (p.rescued) return;
+      const y = floorY(h, p.floor) - 18;
+      const x = pxL + (pxR - pxL) * p.x;
+      ctx.font = "22px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(p.emoji, x, y);
+    });
+
+    const py = floorY(h, player.floor) - 14;
+    const pxx = pxL + (pxR - pxL) * player.x;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(pxx, py, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#58a6ff";
+    ctx.beginPath();
+    ctx.arc(pxx, py, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(pxx + player.facing * 8 - 2, py - 3, 6, 4);
+    ctx.fillStyle = "rgba(230,237,243,0.95)";
+    ctx.font = "bold 11px 'Noto Sans JP',sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("隊員（あなた）", pxx, py + 22);
+  }
+
+  function stepSimulation(dt) {
+    const h = canvas.height / (window.devicePixelRatio || 1);
+    if (h < 80) return null;
+    const slowMul = performance.now() < slowBuffUntil ? 0.45 : 1;
+    const maxHazard = h * 0.92;
+    hazardY = Math.min(maxHazard, hazardY + hazardSpeed * slowMul * dt);
+
+    const playerWorldY = floorY(h, player.floor);
+    const hazardTopY = h - hazardY;
+    if (hazardY > 1 && hazardTopY <= playerWorldY + 14) return "lose_hazard";
+    if (timeLeft <= 0) return "lose_time";
+    return null;
+  }
+
+  function tryRescueNearby() {
+    const reach = 0.12;
+    pets.forEach((p) => {
+      if (p.rescued) return;
+      if (p.floor === player.floor && Math.abs(p.x - player.x) < reach) p.rescued = true;
+    });
+  }
+
+  function update(dt) {
+    timeLeft -= dt;
+    anim += dt * 60;
+    const w = canvas.width / (window.devicePixelRatio || 1);
+    const pxL = platformLeft(w);
+    const pxR = platformRight(w);
+    const margin = 0.04;
+    const step = 0.08 * (dt * 60);
+    const stairX = STAIR_X;
+
+    if (keys["ArrowLeft"] || keys["a"] || keys["A"]) {
+      player.x = Math.max(margin, player.x - step);
+      player.facing = -1;
+    }
+    if (keys["ArrowRight"] || keys["d"] || keys["D"]) {
+      player.x = Math.min(1 - margin, player.x + step);
+      player.facing = 1;
+    }
+    if (keys["ArrowUp"] || keys["w"] || keys["W"]) {
+      if (player.floor < FLOORS - 1 && player.x >= stairX) {
+        player.floor += 1;
+        player.x = 0.2;
+      }
+    }
+
+    tryRescueNearby();
+
+    const rescued = pets.filter((p) => p.rescued);
+    document.getElementById("hud-floor").textContent = `${player.floor + 1}階`;
+    document.getElementById("hud-pets").textContent = `救出 ${rescued.length}/${pets.length}`;
+    document.getElementById("hud-time").textContent = `残り ${Math.max(0, Math.ceil(timeLeft))}秒`;
+  }
+
+  let touchStart = null;
+  let touchAngle = 0;
+
+  canvas.addEventListener("touchstart", (e) => {
+    if (gameState !== "play") return;
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    touchAngle = Math.atan2(t.clientY - cy, t.clientX - cx);
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", (e) => {
+    if (gameState !== "play" || !touchStart) return;
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const rect = canvas.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    touchAngle = Math.atan2(t.clientY - cy, t.clientX - cx);
+    player.facing = Math.cos(touchAngle) >= 0 ? 1 : -1;
+  }, { passive: false });
+
+  canvas.addEventListener("touchend", (e) => {
+    if (gameState !== "play" || !touchStart) return;
+    e.preventDefault();
+    const t = e.changedTouches[0] || e.touches[0];
+    const dt = performance.now() - touchStart.t;
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    touchStart = null;
+    if (dt < 280 && Math.hypot(dx, dy) < 14) {
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const dir = Math.cos(touchAngle) >= 0 ? 1 : -1;
+      player.facing = dir;
+      const step = 0.14;
+      player.x = Math.max(0.04, Math.min(0.96, player.x + dir * step));
+      const stairX = 0.88;
+      if (player.floor < FLOORS - 1 && player.x >= stairX && dir > 0) {
+        player.floor += 1;
+        player.x = 0.2;
+      }
+      tryRescueNearby();
+    }
+  }, { passive: false });
+
+  function endGame(won, reason) {
+    gameState = "result";
+    setPlayUI(false);
+    const rescued = pets.filter((p) => p.rescued);
+    const coinsEarned = won
+      ? Math.floor(20 + rescued.length * 15 + rescued.reduce((a, p) => a + p.floor * 8, 0))
+      : Math.floor(rescued.length * 10);
+    save.coins += coinsEarned;
+    saveState();
+
+    const title = document.getElementById("result-title");
+    const body = document.getElementById("result-body");
+    if (won) {
+      title.textContent = "脱出成功！";
+      title.style.color = "var(--ok)";
+      body.innerHTML = `<strong>${currentStage.name}</strong> をクリア。<br>救出: <strong>${rescued.length}</strong> 匹<br>獲得コイン: <strong>${coinsEarned}</strong><br>${rescued.map((p) => p.emoji + " " + p.name).join(" · ") || "（なし）"}`;
+    } else {
+      title.textContent = reason === "time" ? "時間切れ…" : "救出失敗…";
+      title.style.color = "var(--danger)";
+      body.innerHTML = `ビルに飲み込まれました。<br>それでも助けた子: <strong>${rescued.length}</strong> 匹<br>慰謝コイン: <strong>${coinsEarned}</strong>`;
+    }
+    showScreen("screen-result");
+  }
+
+  function loop(ts) {
+    if (gameState !== "play") return;
+    const dt = Math.min(0.05, (ts - lastTs) / 1000);
+    lastTs = ts;
+    update(dt);
+    const lose = stepSimulation(dt);
+    draw();
+    if (lose === "lose_hazard" || lose === "lose_time") {
+      endGame(false, lose === "lose_time" ? "time" : "hazard");
+      return;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  document.getElementById("btn-escape").addEventListener("click", () => {
+    if (gameState !== "play") return;
+    endGame(true, "escape");
+  });
+
+  document.getElementById("btn-slow").addEventListener("click", () => {
+    if (gameState !== "play" || !save.hasSlowMachine) return;
+    slowBuffUntil = performance.now() + 6000;
+    save.hasSlowMachine = false;
+    saveState();
+    document.getElementById("btn-slow").style.display = "none";
+  });
+
+  document.getElementById("to-stages").addEventListener("click", () => {
+    showScreen("screen-stages");
+  });
+  document.getElementById("from-stages-title").addEventListener("click", () => {
+    showScreen("screen-title");
+  });
+  document.getElementById("to-shop").addEventListener("click", () => {
+    refreshShopUI();
+    showScreen("screen-shop");
+  });
+  document.getElementById("from-shop-title").addEventListener("click", () => {
+    showScreen("screen-title");
+  });
+  document.getElementById("result-again").addEventListener("click", () => {
+    if (currentStage) startStage(currentStage);
+    else showScreen("screen-stages");
+  });
+  document.getElementById("result-shop").addEventListener("click", () => {
+    refreshShopUI();
+    showScreen("screen-shop");
+  });
+  document.getElementById("result-title-btn").addEventListener("click", () => {
+    gameState = "title";
+    showScreen("screen-title");
+  });
+
+  document.getElementById("pad-left").addEventListener("click", () => moveStep(-1));
+  document.getElementById("pad-right").addEventListener("click", () => moveStep(1));
+  document.getElementById("pad-up").addEventListener("click", () => tryClimb());
+
+  canvas.addEventListener("click", (e) => {
+    if (gameState !== "play") return;
+    const rect = canvas.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    if (nx < 0.35) moveStep(-1);
+    else if (nx > 0.65) moveStep(1);
+    else tryClimb();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    keys[e.key] = true;
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+  });
+  window.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+  buildStageGrid();
+  resize();
+  showScreen("screen-title");
+})();
+  </script>
+</body>
+</html>

@@ -11,14 +11,14 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <style>
     :root {
-      --bg: #0d1117;
-      --panel: #161b22;
-      --text: #e6edf3;
-      --muted: rgba(230, 237, 243, 0.65);
-      --accent: #58a6ff;
-      --ok: #3fb950;
-      --warn: #d29922;
-      --danger: #f85149;
+      --bg: #1e2a3f;
+      --panel: #2a3750;
+      --text: #f0f4fc;
+      --muted: rgba(240, 244, 252, 0.72);
+      --accent: #5fb8ff;
+      --ok: #3ddc84;
+      --warn: #ffcc33;
+      --danger: #ff5566;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -48,7 +48,7 @@
       width: 100%;
       height: 100%;
       position: relative;
-      background: #0a0e14;
+      background: #1a2842;
     }
     #game-view canvas {
       display: block;
@@ -93,7 +93,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      background: linear-gradient(165deg, #121a28 0%, var(--bg) 45%);
+      background: linear-gradient(165deg, #4a9fff 0%, #2d5a8a 28%, var(--bg) 58%);
       z-index: 2;
     }
     .screen.hidden { display: none; }
@@ -164,9 +164,10 @@
     .stage-card {
       text-align: left;
       padding: 12px 14px;
-      border-radius: 14px;
+      border-radius: 16px;
       background: var(--panel);
-      border: 1px solid rgba(230, 237, 243, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
       cursor: pointer;
       transition: border-color 0.15s ease;
     }
@@ -204,6 +205,11 @@
       font-size: clamp(11px, 2.8vw, 13px);
       padding: 8px 12px;
       border-radius: 999px;
+    }
+    .hud-actions button.cam-preset {
+      font-size: clamp(10px, 2.4vw, 12px);
+      padding: 6px 10px;
+      border: 1px solid rgba(95, 184, 255, 0.55);
     }
     #touch-pad {
       position: absolute;
@@ -341,8 +347,11 @@
           <span id="hud-key" class="hidden"></span>
         </div>
         <div class="hud-actions">
-          <button type="button" class="btn-secondary" id="cam-ccw" title="視点を左へ">視点◀</button>
-          <button type="button" class="btn-secondary" id="cam-cw" title="視点を右へ">▶視点</button>
+          <button type="button" class="btn-secondary cam-preset" id="cam-preset-diagonal" title="斜め（バランス）">視点·斜め</button>
+          <button type="button" class="btn-secondary cam-preset" id="cam-preset-side" title="横から（奥行きが分かりやすい）">視点·横</button>
+          <button type="button" class="btn-secondary cam-preset" id="cam-preset-top" title="やや上から">視点·上</button>
+          <button type="button" class="btn-secondary" id="cam-ccw" title="視点を左へ">◀</button>
+          <button type="button" class="btn-secondary" id="cam-cw" title="視点を右へ">▶</button>
           <button type="button" class="btn-secondary" id="btn-slow" title="購入済みのとき使用">遅くするマシンを投げる</button>
           <button type="button" class="btn-primary" id="btn-escape">ヘリで脱出</button>
         </div>
@@ -363,16 +372,17 @@
       <div id="screen-title" class="screen centered">
         <h1>ディザスター・ペット・レスキュー</h1>
         <p class="subtitle" lang="en" style="font-size:0.85rem;opacity:0.85;">Disaster Pet Rescue · デモ版</p>
-        <p class="subtitle">救出アクション × 育成シミュレーションのたたき台です。災害からペットを連れ帰り、拠点で餌やけをして変異・進化のきっかけを試せます。</p>
+        <p class="subtitle">救出アクション × 育成シミュレーションのたたき台です。見た目は <strong>Roblox 的</strong>なカラフルでブロックっぽいトーンを目指しています（3D・奥行き移動はそのまま）。災害からペットを連れ帰り、拠点で餌やけをして変異のきっかけを試せます。</p>
         <div class="howto">
           <strong>遊び方（デモ）</strong>
           <ol>
             <li><strong>レスキュー</strong>：ステージへ出動。初めての方は一覧先頭の <strong>操作デモ（練習）</strong> がおすすめです。本番は下から災害が迫り、<strong>リスク％</strong>も時間で上昇。100%で建物崩壊。</li>
             <li>一部ステージは <strong>鍵</strong> を拾わないと上の階へ進めません（3Dで金色の鍵）。</li>
             <li>メインは <strong>3Dビュー</strong>。隊員は <strong>←→</strong> で左右、<strong>W/S</strong> または <strong>手前・奥</strong> で奥行き移動。<strong>上の階は右奥の階段ゾーンで ↑</strong> のみ（横移動だけでは上がれません）。</li>
-            <li><strong>視点</strong>：PC では <strong>Q / E</strong> で回転、<strong>右ボタンドラッグ</strong>で回転・俯仰、<strong>マウスホイール</strong>でズーム。タッチは画面上部 HUD の <strong>視点◀ / ▶視点</strong> で回転。</li>
+            <li><strong>視点</strong>：HUD の <strong>視点·斜め／横／上</strong> でプリセット切替（横は奥行きが把握しやすい）。PC は <strong>1・2・3</strong> キーでも同じ。あわせて <strong>Q / E</strong>・右ドラッグ・ホイールでも調整可。</li>
             <li>右下の <strong>断面モニタ</strong> で、縦割りの建物に対する<strong>隊員位置（青）</strong>と<strong>災害の高さ</strong>が分かります。</li>
             <li><strong>脱出</strong>で成功。救出した子は <strong>拠点（水槽・飼育スペース）</strong> に送られ、餌で変異が進むことがあります。</li>
+            <li>本編イメージの <strong>5 災害</strong>（地震・怪獣・津波・火事・クレーン）をステージに割り当てています。詳細は <code style="font-size:0.78rem;">docs/pet_rescue_game_design.md</code> を参照。</li>
             <li><strong>ショップ</strong>でコイル・餌・拠点拡張などを購入。</li>
           </ol>
           <p style="margin-top:8px;"><strong>起動</strong>：<code style="font-size:0.78rem;">index.html</code> を Chrome / Edge 等で開いてください。</p>
@@ -443,7 +453,20 @@
   let iceDecor = null;
   let inputElement = null;
 
-  const WORLD = { floorH: 1.42, platHalf: 3.6, depth: 3.05 };
+  const WORLD = {
+    floorH: 1.42,
+    platHalf: 3.6,
+    depth: 3.05,
+    platThickness: 0.14,
+    rescueScale: 0.88,
+    /** メッシュ原点より足元がどれだけ下か（スケール前のおおよそ） */
+    rescueFootBelowOriginUnscaled: 0.062,
+    petOriginAboveDeck: 0.056,
+  };
+
+  function floorDeckTopY(floorIndex) {
+    return floorIndex * WORLD.floorH + WORLD.platThickness * 0.5;
+  }
   const MARGIN_Z = 0.05;
   const STAIR_X = 0.82;
   const STAIR_Z_MIN = 0.34;
@@ -474,7 +497,7 @@
   }
 
   function playerWorldY() {
-    return player.floor * WORLD.floorH + 0.36;
+    return floorDeckTopY(player.floor) + WORLD.rescueFootBelowOriginUnscaled * WORLD.rescueScale;
   }
 
   function getLayoutSize() {
@@ -608,6 +631,29 @@
         const le2 = le.clone();
         le2.position.z = -0.12;
         g.add(le, le2);
+        break;
+      }
+      case "hedgehog": {
+        const sp = fur(0x6a5a4a);
+        const belly = fur(0xc8b8a8);
+        const body = addSh(new T.Mesh(new T.SphereGeometry(0.13, 14, 12), sp));
+        body.scale.set(1.05, 0.88, 1.15);
+        g.add(body);
+        const bel = addSh(new T.Mesh(new T.SphereGeometry(0.08, 10, 8), belly));
+        bel.position.set(0, -0.04, 0.06);
+        g.add(bel);
+        for (let i = 0; i < 8; i++) {
+          const ang = (i / 8) * Math.PI * 2;
+          const spk = addSh(new T.Mesh(new T.ConeGeometry(0.028, 0.11, 4), sp));
+          spk.position.set(Math.cos(ang) * 0.1, 0.05 + (i % 2) * 0.03, Math.sin(ang) * 0.1);
+          spk.rotation.order = "YXZ";
+          spk.rotation.y = -ang;
+          spk.rotation.x = Math.PI / 2 + 0.15;
+          g.add(spk);
+        }
+        const nose = addSh(new T.Mesh(new T.SphereGeometry(0.03, 8, 6), new T.MeshStandardMaterial({ color: 0x221a18, roughness: 0.5 })));
+        nose.position.set(0.12, 0.02, 0);
+        g.add(nose);
         break;
       }
       case "fish": {
@@ -815,7 +861,7 @@
     keyRoot.visible = show;
     if (show) {
       const kz = keyDrop.z != null ? keyDrop.z : 0.5;
-      keyRoot.position.set(worldX(keyDrop.x), keyDrop.floor * WORLD.floorH + 0.38, worldZ(kz));
+      keyRoot.position.set(worldX(keyDrop.x), floorDeckTopY(keyDrop.floor) + 0.34, worldZ(kz));
     }
   }
 
@@ -828,9 +874,9 @@
     }
     clearThreeScene();
 
-    scene.add(new T.AmbientLight(0x8899aa, 0.48));
-    const sun = new T.DirectionalLight(0xfff5e6, 1.08);
-    sun.position.set(-7, 16, 11);
+    scene.add(new T.AmbientLight(0xb8d4ff, 0.62));
+    const sun = new T.DirectionalLight(0xfff8f0, 1.22);
+    sun.position.set(-8, 18, 12);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.near = 0.5;
@@ -840,11 +886,11 @@
     sun.shadow.camera.top = 20;
     sun.shadow.camera.bottom = -4;
     scene.add(sun);
-    const rim = new T.DirectionalLight(0x6688cc, 0.38);
-    rim.position.set(8, 7, -7);
+    const rim = new T.DirectionalLight(0xffccee, 0.45);
+    rim.position.set(9, 8, -8);
     scene.add(rim);
 
-    const floorMat = new T.MeshStandardMaterial({ color: 0x3a4556, roughness: 0.85, metalness: 0.05 });
+    const floorMat = new T.MeshStandardMaterial({ color: 0x6ab8f0, roughness: 0.42, metalness: 0.08 });
     for (let f = 0; f < FLOORS; f++) {
       const y = f * WORLD.floorH;
       const plat = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2, 0.14, WORLD.depth), floorMat);
@@ -853,11 +899,11 @@
       scene.add(plat);
       if (f < FLOORS - 1) {
         const sz = stairWorldDepth();
-        const stair = new T.Mesh(new T.BoxGeometry(0.52, WORLD.floorH * 0.92, sz), new T.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.72 }));
+        const stair = new T.Mesh(new T.BoxGeometry(0.52, WORLD.floorH * 0.92, sz), new T.MeshStandardMaterial({ color: 0xffdd55, roughness: 0.38, metalness: 0.05 }));
         stair.position.set(worldX(STAIR_X), y + WORLD.floorH * 0.45, stairWorldCenterZ());
         stair.castShadow = true;
         scene.add(stair);
-        const railMat = new T.MeshStandardMaterial({ color: 0x8899aa, roughness: 0.55, metalness: 0.2 });
+        const railMat = new T.MeshStandardMaterial({ color: 0xe8f0ff, roughness: 0.35, metalness: 0.25 });
         const railH = 0.22;
         const railL = sz * 0.92;
         const railSide = new T.Mesh(new T.BoxGeometry(0.05, railH, railL), railMat);
@@ -867,13 +913,13 @@
         scene.add(railSide, railSide2);
       }
       const edgeZ = WORLD.depth / 2 - 0.04;
-      const railLong = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2 - 0.2, 0.1, 0.06), new T.MeshStandardMaterial({ color: 0x5a6578, roughness: 0.75 }));
+      const railLong = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2 - 0.2, 0.1, 0.06), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.12 }));
       railLong.position.set(0, y + 0.12, edgeZ);
       const railLong2 = railLong.clone();
       railLong2.position.z = -edgeZ;
       scene.add(railLong, railLong2);
     }
-    const helipad = new T.Mesh(new T.BoxGeometry(1.65, 0.08, 1.25), new T.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.5, emissive: 0x07381a, emissiveIntensity: 0.22 }));
+    const helipad = new T.Mesh(new T.BoxGeometry(1.65, 0.08, 1.25), new T.MeshStandardMaterial({ color: 0x00d26a, roughness: 0.35, emissive: 0x00a050, emissiveIntensity: 0.35 }));
     helipad.position.set(WORLD.platHalf - 0.95, (FLOORS - 1) * WORLD.floorH + 0.07, 0);
     helipad.receiveShadow = true;
     scene.add(helipad);
@@ -886,11 +932,11 @@
     hazardMat = new T.MeshStandardMaterial({
       color: hazColor,
       transparent: true,
-      opacity: 0.58,
-      roughness: 0.28,
-      metalness: 0.06,
+      opacity: 0.52,
+      roughness: 0.22,
+      metalness: 0.12,
       emissive: new T.Color(hazColor),
-      emissiveIntensity: 0.22,
+      emissiveIntensity: 0.32,
     });
     hazardMesh = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2 + 0.4, 0.08, WORLD.depth + 0.35), hazardMat);
     hazardMesh.position.set(0, 0, 0);
@@ -898,6 +944,7 @@
     scene.add(hazardMesh);
 
     playerRoot = makeRescueWorker(T);
+    playerRoot.scale.setScalar(WORLD.rescueScale);
     scene.add(playerRoot);
 
     pets.forEach((p) => {
@@ -930,7 +977,7 @@
 
     const sky = currentStage?.skyHex ?? 0x0d1117;
     scene.background = new T.Color(sky);
-    scene.fog = new T.Fog(sky, 24, 78);
+    scene.fog = new T.Fog(sky, 32, 96);
   }
 
   function initRenderer() {
@@ -968,7 +1015,7 @@
       p.mesh.visible = !p.rescued;
       if (!p.rescued) {
         const petZ = p.z != null ? p.z : 0.5;
-        p.mesh.position.set(worldX(p.x), p.floor * WORLD.floorH + 0.28, worldZ(petZ));
+        p.mesh.position.set(worldX(p.x), floorDeckTopY(p.floor) + WORLD.petOriginAboveDeck, worldZ(petZ));
         p.mesh.rotation.y = Math.sin(anim * 0.04 + p.floor * 0.7 + petZ * 3) * 0.22;
       }
     });
@@ -982,13 +1029,19 @@
     const px = playerRoot.position.x;
     const py = playerRoot.position.y;
     const pzz = playerRoot.position.z;
-    const focusY = py + 0.68;
+    const focusY = py + 0.46 * WORLD.rescueScale;
     const flat = camOrbitDist * Math.cos(camOrbitPitch);
     const cx = px + flat * Math.sin(camOrbitYaw);
     const cz = pzz + flat * Math.cos(camOrbitYaw);
     const cy = focusY + camOrbitDist * Math.sin(camOrbitPitch);
-    camera.position.lerp(new T.Vector3(cx, cy, cz), 0.11);
-    camera.lookAt(px, py + 0.58, pzz);
+    const targetCam = new T.Vector3(cx, cy, cz);
+    if (camSnapFrames > 0) {
+      camera.position.copy(targetCam);
+      camSnapFrames -= 1;
+    } else {
+      camera.position.lerp(targetCam, 0.11);
+    }
+    camera.lookAt(px, focusY, pzz);
   }
 
   function drawMinimap() {
@@ -1189,33 +1242,111 @@
       extra: null,
       tutorial: true,
       timeLimitSec: 128,
-      colors: { hazardFill: "rgba(110, 150, 195, 0.4)", sky: "#2a3848" },
-      skyHex: 0x1e2836,
-      hazardHex: 0x5c7a9a,
+      floorCount: 3,
+      planFloors: 3,
+      colors: { hazardFill: "rgba(130, 175, 220, 0.42)", sky: "#4a7aba" },
+      skyHex: 0x5a8fd4,
+      hazardHex: 0x6a9fd0,
     },
-    { id: "burning_house", name: "燃え上がる民家", place: "住宅区画", hazard: "炎・崩落", speed: 1.06, riskRate: 1.05, requiresKey: false, extra: null, colors: { hazardFill: "rgba(244, 96, 54, 0.55)", sky: "#4a2818" }, skyHex: 0x3d2415, hazardHex: 0xc0392b },
-    { id: "aqua_tower", name: "沈みゆく水槽ビル", place: "水族館タワー", hazard: "水没", speed: 1.18, riskRate: 1.22, requiresKey: true, extra: null, colors: { hazardFill: "rgba(30, 120, 160, 0.52)", sky: "#3d5a78" }, skyHex: 0x2a4058, hazardHex: 0x1a6b8c },
-    { id: "iceberg", name: "崩れる氷山基地", place: "極寒フィールド", hazard: "氷盤崩落", speed: 1.02, riskRate: 1.08, requiresKey: true, extra: "ice", colors: { hazardFill: "rgba(180, 220, 255, 0.45)", sky: "#2a3d52" }, skyHex: 0x1e3045, hazardHex: 0xa8d8f0 },
-    { id: "storm_station", name: "暴風のターミナル", place: "高架ステーション", hazard: "突風・浸水", speed: 1.12, riskRate: 1.18, requiresKey: false, extra: null, colors: { hazardFill: "rgba(70, 90, 120, 0.5)", sky: "#354050" }, skyHex: 0x283038, hazardHex: 0x5d6d7e },
-    { id: "sealed_lab", name: "封鎖された研究室", place: "地下研究棟", hazard: "冷却損傷", speed: 1.15, riskRate: 1.28, requiresKey: true, extra: "lab", colors: { hazardFill: "rgba(100, 200, 160, 0.4)", sky: "#1e2a24" }, skyHex: 0x152018, hazardHex: 0x58b894 },
+    {
+      id: "earthquake",
+      name: "揺れる大きな家",
+      place: "3階建て · 地震",
+      hazard: "外側から崩落",
+      speed: 1.04,
+      riskRate: 1.02,
+      requiresKey: false,
+      extra: null,
+      floorCount: 3,
+      planFloors: 3,
+      timeLimitSec: 82,
+      colors: { hazardFill: "rgba(190, 160, 120, 0.48)", sky: "#7ab8f0" },
+      skyHex: 0x70b0f0,
+      hazardHex: 0xa08068,
+    },
+    {
+      id: "kaiju",
+      name: "怪獣がビルを襲う！",
+      place: "10階ビル（デモ6階）",
+      hazard: "怪獣の爪",
+      speed: 1.1,
+      riskRate: 1.14,
+      requiresKey: false,
+      extra: null,
+      floorCount: 6,
+      planFloors: 10,
+      timeLimitSec: 92,
+      colors: { hazardFill: "rgba(255, 90, 110, 0.5)", sky: "#ffaa88" },
+      skyHex: 0xffb090,
+      hazardHex: 0xe83a50,
+    },
+    {
+      id: "tsunami_hotel",
+      name: "津波ホテル",
+      place: "大ホテル（デモ8階 / 本編20階）",
+      hazard: "水が下から上昇",
+      speed: 1.14,
+      riskRate: 1.2,
+      requiresKey: true,
+      extra: null,
+      floorCount: 8,
+      planFloors: 20,
+      timeLimitSec: 108,
+      colors: { hazardFill: "rgba(60, 170, 220, 0.48)", sky: "#55a8ee" },
+      skyHex: 0x5cb0f0,
+      hazardHex: 0x22aadd,
+    },
+    {
+      id: "fire_mansion",
+      name: "マンション火災",
+      place: "7階マンション（デモ7階）",
+      hazard: "炎が迫る",
+      speed: 1.08,
+      riskRate: 1.1,
+      requiresKey: false,
+      extra: null,
+      floorCount: 7,
+      planFloors: 7,
+      timeLimitSec: 95,
+      colors: { hazardFill: "rgba(255, 120, 70, 0.5)", sky: "#c87850" },
+      skyHex: 0xd88860,
+      hazardHex: 0xff5530,
+    },
+    {
+      id: "crane_villain",
+      name: "クレーンの悪者",
+      place: "建設現場（デモ6階 / 本編15階）",
+      hazard: "クレーンが追う",
+      speed: 1.12,
+      riskRate: 1.16,
+      requiresKey: true,
+      extra: null,
+      floorCount: 6,
+      planFloors: 15,
+      timeLimitSec: 93,
+      colors: { hazardFill: "rgba(255, 190, 60, 0.48)", sky: "#a8b8c8" },
+      skyHex: 0xb0c0d8,
+      hazardHex: 0xffaa22,
+    },
   ];
 
   const PET_TIERS = [
-    { maxFloor: 0, label: "ノーマル", rankId: "normal", pets: [{ emoji: "🐹", name: "ハムスター", kind: "hamster" }, { emoji: "🐠", name: "金魚", kind: "fish" }] },
-    { maxFloor: 1, label: "レア", rankId: "rare", pets: [{ emoji: "🐕", name: "犬", kind: "dog" }, { emoji: "🐈", name: "猫", kind: "cat" }, { emoji: "🐧", name: "ペンギン", kind: "penguin" }] },
-    { maxFloor: 2, label: "エピック", rankId: "epic", pets: [{ emoji: "✨🐕", name: "光る犬", kind: "dog_glow" }, { emoji: "🦦", name: "カワウソ", kind: "otter" }] },
-    { maxFloor: 3, label: "レジェンド", rankId: "legend", pets: [{ emoji: "✨🐈‍⬛", name: "星猫", kind: "cat_star" }, { emoji: "🦈", name: "子サメ", kind: "shark" }] },
-    { maxFloor: 99, label: "神話 Mythic", rankId: "mythic", pets: [{ emoji: "🐉", name: "ミニ竜", kind: "dragon" }, { emoji: "🦄", name: "一角獣", kind: "unicorn" }] },
+    { label: "コモン", rankId: "common", pets: [{ emoji: "🐹", name: "ハムスター", kind: "hamster" }, { emoji: "🦔", name: "ハリネズミ", kind: "hedgehog" }] },
+    { label: "ノーマル", rankId: "normal", pets: [{ emoji: "🐕", name: "犬", kind: "dog" }, { emoji: "🐈", name: "猫", kind: "cat" }, { emoji: "🐧", name: "ペンギン", kind: "penguin" }] },
+    { label: "レア", rankId: "rare", pets: [{ emoji: "✨🐕", name: "光る犬", kind: "dog_glow" }, { emoji: "🦦", name: "カワウソ", kind: "otter" }] },
+    { label: "超レア", rankId: "super_rare", pets: [{ emoji: "✨🐈‍⬛", name: "星猫", kind: "cat_star" }, { emoji: "🦈", name: "子サメ", kind: "shark" }] },
+    { label: "伝説・神話", rankId: "mythic", pets: [{ emoji: "🐉", name: "ミニ竜", kind: "dragon" }, { emoji: "🦄", name: "一角獣", kind: "unicorn" }] },
   ];
+
+  let FLOORS = 5;
 
   const MUTATION_STAGES = ["—", "銀", "ダイヤ", "エメラルド", "レインボー"];
 
   function tierForFloor(floorIndex) {
-    let t = PET_TIERS[0];
-    for (let i = 0; i < PET_TIERS.length; i++) {
-      if (floorIndex <= PET_TIERS[i].maxFloor) { t = PET_TIERS[i]; break; }
-    }
-    return t;
+    const span = Math.max(1, FLOORS - 1);
+    const u = Math.min(1, Math.max(0, floorIndex / span));
+    const idx = Math.min(PET_TIERS.length - 1, Math.floor(u * (PET_TIERS.length - 1) + 0.0001));
+    return PET_TIERS[idx];
   }
 
   function petPayloadForFloor(floorIndex) {
@@ -1278,7 +1409,6 @@
   let currentStage = null;
   let gameState = "title";
 
-  const FLOORS = 5;
   const TIME_LIMIT_SEC = 75;
   let hazardY = 0;
   let hazardSpeed = 0;
@@ -1290,19 +1420,39 @@
   let slowBuffUntil = 0;
   let anim = 0;
   const CAM_PITCH_MIN = 0.24;
-  const CAM_PITCH_MAX = 1.14;
+  const CAM_PITCH_MAX = 1.18;
   const CAM_DIST_MIN = 10.5;
   const CAM_DIST_MAX = 27;
   let camOrbitYaw = Math.atan2(-5.5, 10.8);
   let camOrbitPitch = 0.46;
   let camOrbitDist = 16.8;
   let camPointerDrag = null;
+  let camSnapFrames = 0;
 
   function resetCameraOrbit() {
     camOrbitYaw = Math.atan2(-5.5, 10.8);
     camOrbitPitch = 0.46;
     camOrbitDist = 16.8;
     camPointerDrag = null;
+    camSnapFrames = 14;
+  }
+
+  /** 斜め=バランス、横=+X側から（Z奥行きが読みやすい）、上=見下ろし寄り */
+  function applyCameraPreset(preset) {
+    if (gameState !== "play") return;
+    if (preset === "diagonal") {
+      camOrbitYaw = Math.atan2(-5.5, 10.8);
+      camOrbitPitch = 0.46;
+      camOrbitDist = 16.8;
+    } else if (preset === "side") {
+      camOrbitYaw = Math.PI / 2 - 0.04;
+      camOrbitPitch = 0.33;
+      camOrbitDist = 19.5;
+    } else if (preset === "top") {
+      camOrbitPitch = Math.min(CAM_PITCH_MAX, 0.98);
+      camOrbitDist = Math.min(CAM_DIST_MAX, 23);
+    }
+    camSnapFrames = 16;
   }
 
   let riskPct = 0;
@@ -1407,7 +1557,13 @@
       const div = document.createElement("div");
       div.className = "stage-card";
       const tag = s.tutorial ? " · 練習" : s.requiresKey ? " · 🗝鍵" : "";
-      div.innerHTML = `<strong>${s.name}</strong><span>${s.place} · ${s.hazard}${tag}（災害×${s.speed} リスク×${s.riskRate}）</span>`;
+      const demoF = s.floorCount != null ? s.floorCount : 5;
+      const planF = s.planFloors;
+      const floorLine =
+        planF && planF !== demoF
+          ? ` · プレイ${demoF}階（企画は${planF}階建て）`
+          : ` · ${demoF}階`;
+      div.innerHTML = `<strong>${s.name}</strong><span>${s.place} · ${s.hazard}${tag}${floorLine}（災害×${s.speed} リスク×${s.riskRate}）</span>`;
       div.addEventListener("click", () => startStage(s));
       grid.appendChild(div);
     });
@@ -1594,6 +1750,7 @@
     gameState = "play";
     showScreen("");
     setPlayUI(true);
+    FLOORS = Math.min(20, Math.max(3, Number(stage.floorCount) || 5));
     hazardY = 0;
     hazardSpeed = 18 * stage.speed;
     timeLeft = stage.timeLimitSec != null ? stage.timeLimitSec : TIME_LIMIT_SEC;
@@ -1604,8 +1761,9 @@
     resetCameraOrbit();
     keyCollected = false;
     if (stage.requiresKey) {
+      const keyFloorSpan = Math.min(3, Math.max(2, FLOORS - 1));
       keyDrop = {
-        floor: Math.floor(Math.random() * 2),
+        floor: Math.floor(Math.random() * keyFloorSpan),
         x: 0.18 + Math.random() * 0.55,
         z: MARGIN_Z + Math.random() * (1 - 2 * MARGIN_Z),
       };
@@ -1618,7 +1776,8 @@
       if (stage.tutorial) {
         count = f <= 1 ? 2 : f === 2 ? 1 : 0;
       } else {
-        count = f <= 1 ? 2 : f === 2 ? 2 : 1;
+        const denseUntil = Math.max(2, FLOORS - 3);
+        count = f < denseUntil ? 2 : 1;
       }
       for (let i = 0; i < count; i++) {
         const spec = petPayloadForFloor(f);
@@ -1638,8 +1797,8 @@
     }
     document.getElementById("hud-stage").textContent = stage.name;
     document.getElementById("play-hint").textContent = stage.tutorial
-      ? "【練習】←→／A・D で左右、W・S または 手前・奥 で奥行き。右奥の階段付近で ↑ で上の階。ペットに近づくと救出。断面モニタで位置確認。PCは Q・E・右ドラッグ・ホイールで視点。慣れたら本番ステージへ。"
-      : "右下「断面モニタ」で災害の高さと隊員位置を確認。リスク100%で崩壊。鍵は拾ってから上の階へ。◀↑▶／キー。PCは Q・E・右ドラッグ・ホイールで視点。脱出で拠点に追加。";
+      ? "【練習】←→／A・D、W・S または手前・奥。奥行きが分かりにくいときは HUD「視点·横」またはキー2。右奥の階段で ↑。PCは 1=斜め 2=横 3=上から。断面モニタも併用。"
+      : "奥行きは「視点·横」またはキー2がおすすめ。1=斜め 3=上から。右下断面モニタで高さ確認。鍵→上の階。◀↑▶／キー。脱出で拠点へ。";
     document.getElementById("btn-slow").style.display = save.hasSlowMachine ? "inline-block" : "none";
     const hk = document.getElementById("hud-key");
     if (stage.requiresKey) {
@@ -1763,7 +1922,7 @@
     }
 
     const rescued = pets.filter((p) => p.rescued);
-    document.getElementById("hud-floor").textContent = `${player.floor + 1}階`;
+    document.getElementById("hud-floor").textContent = `${player.floor + 1}/${FLOORS}階`;
     document.getElementById("hud-pets").textContent = `救出 ${rescued.length}/${pets.length}`;
     document.getElementById("hud-time").textContent = `残り ${Math.max(0, Math.ceil(timeLeft))}秒`;
     const hr = document.getElementById("hud-risk");
@@ -1841,6 +2000,10 @@
     requestAnimationFrame(loop);
   }
 
+  document.getElementById("cam-preset-diagonal").addEventListener("click", () => applyCameraPreset("diagonal"));
+  document.getElementById("cam-preset-side").addEventListener("click", () => applyCameraPreset("side"));
+  document.getElementById("cam-preset-top").addEventListener("click", () => applyCameraPreset("top"));
+
   document.getElementById("cam-ccw").addEventListener("click", () => {
     if (gameState !== "play") return;
     camOrbitYaw += 0.28;
@@ -1908,6 +2071,12 @@
 
   window.addEventListener("keydown", (e) => {
     keys[e.key] = true;
+    if (gameState === "play" && (e.key === "1" || e.key === "2" || e.key === "3")) {
+      e.preventDefault();
+      if (e.key === "1") applyCameraPreset("diagonal");
+      if (e.key === "2") applyCameraPreset("side");
+      if (e.key === "3") applyCameraPreset("top");
+    }
     if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "w" || e.key === "W" || e.key === "s" || e.key === "S") e.preventDefault();
   });
   window.addEventListener("keyup", (e) => { keys[e.key] = false; });

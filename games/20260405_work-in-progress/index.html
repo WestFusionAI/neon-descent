@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0d1117" />
-  <title>ペットレスキュー — デモ</title>
+  <title>ディザスター・ペット・レスキュー — デモ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <style>
     :root {
       --bg: #0d1117;
@@ -42,10 +43,46 @@
       min-height: 0;
       min-height: 50dvh;
     }
-    canvas {
+    #game-view {
       display: block;
       width: 100%;
       height: 100%;
+      position: relative;
+      background: #0a0e14;
+    }
+    #game-view canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    #minimap-wrap {
+      position: absolute;
+      right: max(8px, env(safe-area-inset-right));
+      bottom: max(100px, calc(env(safe-area-inset-bottom) + 88px));
+      z-index: 5;
+      width: 132px;
+      padding: 8px 8px 6px;
+      border-radius: 12px;
+      background: rgba(13, 17, 23, 0.88);
+      border: 1px solid rgba(88, 166, 255, 0.35);
+      pointer-events: none;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+    }
+    #minimap-wrap.hidden { display: none; }
+    #minimap-wrap .minimap-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 4px;
+      letter-spacing: 0.04em;
+    }
+    #minimap {
+      display: block;
+      width: 116px;
+      height: 168px;
+      border-radius: 6px;
+      background: rgba(6, 10, 18, 0.95);
     }
     .screen {
       position: absolute;
@@ -154,6 +191,7 @@
       text-shadow: 0 1px 2px rgba(0,0,0,0.75);
     }
     .hud span { background: rgba(13,17,23,0.72); padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08); }
+    .hud span.hidden { display: none; }
     .hud-actions {
       pointer-events: auto;
       display: flex;
@@ -177,7 +215,13 @@
       gap: 10px;
       pointer-events: auto;
     }
-    #touch-pad.visible { display: flex; }
+    #touch-pad.visible { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    #touch-pad .pad-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    #touch-pad .pad-row.narrow button { width: 76px; font-size: 0.82rem; }
     #touch-pad button {
       width: 56px;
       height: 48px;
@@ -253,63 +297,116 @@
     .shop-item button { flex-shrink: 0; padding: 8px 12px; font-size: 0.82rem; }
     .result-stats { text-align: center; margin: 12px 0; line-height: 1.7; color: var(--muted); font-size: 0.92rem; }
     .result-stats strong { color: var(--text); }
+    .hud .risk-high { color: #ffb86c !important; border-color: rgba(248, 81, 73, 0.55) !important; }
+    .hud .risk-max { color: #ff7b72 !important; border-color: rgba(248, 81, 73, 0.9) !important; animation: pulse 0.8s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity: 0.85; } to { opacity: 1; } }
+    #base-pet-list { width: 100%; max-width: 24rem; margin-top: 10px; }
+    .pet-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: var(--panel);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      text-align: left;
+    }
+    .pet-row .meta { font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
+    .pet-row .feed-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pet-row .feed-row button {
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      border-radius: 8px;
+      width: auto;
+    }
   </style>
 </head>
 <body>
   <div id="back-link"><a href="../../index.html">← 一覧</a></div>
   <div id="app">
     <div id="canvas-wrap">
-      <canvas id="game" aria-label="ゲーム画面"></canvas>
+      <div id="game-view" aria-label="3Dゲーム画面"></div>
+      <div id="minimap-wrap" class="hidden">
+        <div class="minimap-title">断面モニタ</div>
+        <canvas id="minimap" width="116" height="168" aria-label="プレイヤー位置と災害高さ"></canvas>
+      </div>
       <div id="hud" class="hud hidden">
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
           <span id="hud-stage"></span>
           <span id="hud-floor"></span>
           <span id="hud-pets"></span>
+          <span id="hud-risk"></span>
           <span id="hud-time"></span>
+          <span id="hud-key" class="hidden"></span>
         </div>
         <div class="hud-actions">
+          <button type="button" class="btn-secondary" id="cam-ccw" title="視点を左へ">視点◀</button>
+          <button type="button" class="btn-secondary" id="cam-cw" title="視点を右へ">▶視点</button>
           <button type="button" class="btn-secondary" id="btn-slow" title="購入済みのとき使用">遅くするマシンを投げる</button>
           <button type="button" class="btn-primary" id="btn-escape">ヘリで脱出</button>
         </div>
       </div>
       <p id="play-hint" class="hint-box hidden"></p>
       <div id="touch-pad" aria-label="移動ボタン">
-        <button type="button" id="pad-left" aria-label="左へ">◀</button>
-        <button type="button" id="pad-up" aria-label="階段で上へ">↑</button>
-        <button type="button" id="pad-right" aria-label="右へ">▶</button>
+        <div class="pad-row">
+          <button type="button" id="pad-left" aria-label="左へ">◀</button>
+          <button type="button" id="pad-up" aria-label="階段で上へ">↑</button>
+          <button type="button" id="pad-right" aria-label="右へ">▶</button>
+        </div>
+        <div class="pad-row narrow">
+          <button type="button" id="pad-near" aria-label="手前（Z）">手前</button>
+          <button type="button" id="pad-far" aria-label="奥（Z）">奥</button>
+        </div>
       </div>
 
       <div id="screen-title" class="screen centered">
-        <h1>ペットレスキュー</h1>
-        <p class="subtitle">災害が下から迫るビルで、ペットを助けてヘリで脱出するデモ版です。上の階ほどレアな子がいますが、危険も早まります。</p>
+        <h1>ディザスター・ペット・レスキュー</h1>
+        <p class="subtitle" lang="en" style="font-size:0.85rem;opacity:0.85;">Disaster Pet Rescue · デモ版</p>
+        <p class="subtitle">救出アクション × 育成シミュレーションのたたき台です。災害からペットを連れ帰り、拠点で餌やけをして変異・進化のきっかけを試せます。</p>
         <div class="howto">
-          <strong>遊び方</strong>
+          <strong>遊び方（デモ）</strong>
           <ol>
-            <li><strong>ミッションを選ぶ</strong> → ステージ（地震など）をタップ。</li>
-            <li>水色の丸が隊員。<strong>右端の縦線が階段</strong>。右端まで行って <strong>↑（または画面の ↑ ボタン）</strong> で上の階へ。</li>
-            <li>ペットの絵文字に<strong>近づくと自動で救出</strong>。</li>
-            <li>下から災害が迫る前に <strong>ヘリで脱出</strong> を押すとクリア（デモ）。</li>
+            <li><strong>レスキュー</strong>：ステージへ出動。初めての方は一覧先頭の <strong>操作デモ（練習）</strong> がおすすめです。本番は下から災害が迫り、<strong>リスク％</strong>も時間で上昇。100%で建物崩壊。</li>
+            <li>一部ステージは <strong>鍵</strong> を拾わないと上の階へ進めません（3Dで金色の鍵）。</li>
+            <li>メインは <strong>3Dビュー</strong>。隊員は <strong>←→</strong> で左右、<strong>W/S</strong> または <strong>手前・奥</strong> で奥行き移動。<strong>上の階は右奥の階段ゾーンで ↑</strong> のみ（横移動だけでは上がれません）。</li>
+            <li><strong>視点</strong>：PC では <strong>Q / E</strong> で回転、<strong>右ボタンドラッグ</strong>で回転・俯仰、<strong>マウスホイール</strong>でズーム。タッチは画面上部 HUD の <strong>視点◀ / ▶視点</strong> で回転。</li>
+            <li>右下の <strong>断面モニタ</strong> で、縦割りの建物に対する<strong>隊員位置（青）</strong>と<strong>災害の高さ</strong>が分かります。</li>
+            <li><strong>脱出</strong>で成功。救出した子は <strong>拠点（水槽・飼育スペース）</strong> に送られ、餌で変異が進むことがあります。</li>
+            <li><strong>ショップ</strong>でコイル・餌・拠点拡張などを購入。</li>
           </ol>
-          <p style="margin-top:8px;"><strong>起動</strong>：この <code style="font-size:0.78rem;">index.html</code> をブラウザ（Chrome / Edge など）で開いてください。フォルダをダブルクリックするだけでは開けない場合は、ファイルをブラウザのウィンドウにドラッグ＆ドロップしてください。</p>
+          <p style="margin-top:8px;"><strong>起動</strong>：<code style="font-size:0.78rem;">index.html</code> を Chrome / Edge 等で開いてください。</p>
         </div>
-        <button type="button" class="btn-primary" id="to-stages">ミッションを選ぶ</button>
+        <button type="button" class="btn-primary" id="to-stages">レスキューへ出動</button>
         <div class="btn-row">
-          <button type="button" class="btn-secondary" id="to-shop">ショップ（デモ）</button>
+          <button type="button" class="btn-secondary" id="to-base">拠点・育成</button>
+          <button type="button" class="btn-secondary" id="to-shop">ショップ</button>
         </div>
       </div>
 
       <div id="screen-stages" class="screen hidden">
-        <h1>出動ステージ</h1>
-        <p class="subtitle">5種類の災害。デモでは挙動は共通で、見た目と速度倍率だけ変えています。</p>
+        <h1>災害ステージ</h1>
+        <p class="subtitle">火災・水没・氷山などテーマ別。プレイは <strong>Three.js 3D</strong>。速度・リスク・鍵の要否が異なります。</p>
         <div class="stage-grid" id="stage-grid"></div>
         <div class="btn-row" style="margin-top:16px;">
           <button type="button" class="btn-secondary" id="from-stages-title">タイトルへ</button>
         </div>
       </div>
 
+      <div id="screen-base" class="screen hidden">
+        <h1>レスキュー拠点</h1>
+        <p class="subtitle">救出したペットを飼育。餌で<strong>突然変異</strong>（銀・ダイヤ・エメラルド…）が進むことがあります。所持コイン: <strong id="base-coin-display">0</strong></p>
+        <p class="subtitle" style="margin-top:-8px;font-size:0.85rem;">拠点レベル <strong id="habitat-lv">1</strong> · 収容目安 <strong id="habitat-cap">6</strong> 匹（デモ）</p>
+        <div id="base-pet-list"></div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button type="button" class="btn-secondary" id="from-base-title">タイトルへ</button>
+          <button type="button" class="btn-secondary" id="from-base-shop">ショップ</button>
+        </div>
+      </div>
+
       <div id="screen-shop" class="screen hidden">
-        <h1>ショップ（デモ）</h1>
-        <p class="subtitle">コインでアイテムを買うと、ミッション中に「投げる」で使えます（デモは1種類のみ接続）。所持: <strong id="coin-display">0</strong> コイン</p>
+        <h1>ショップ</h1>
+        <p class="subtitle">救出報酬のコインで装備・餌・拠点を強化。所持: <strong id="coin-display">0</strong> コイン</p>
         <div class="shop-list" id="shop-list"></div>
         <div class="btn-row">
           <button type="button" class="btn-secondary" id="from-shop-title">戻る</button>
@@ -330,24 +427,788 @@
 
   <script>
 (function () {
-  const canvas = document.getElementById("game");
-  const ctx = canvas.getContext("2d");
+  const gameView = document.getElementById("game-view");
+  const minimapCanvas = document.getElementById("minimap");
+  const minimapCtx = minimapCanvas.getContext("2d");
+  const minimapWrap = document.getElementById("minimap-wrap");
+
+  let THREE_REF = typeof THREE !== "undefined" ? THREE : null;
+  let scene = null;
+  let camera = null;
+  let renderer = null;
+  let playerRoot = null;
+  let hazardMesh = null;
+  let hazardMat = null;
+  let keyRoot = null;
+  let iceDecor = null;
+  let inputElement = null;
+
+  const WORLD = { floorH: 1.42, platHalf: 3.6, depth: 3.05 };
+  const MARGIN_Z = 0.05;
+  const STAIR_X = 0.82;
+  const STAIR_Z_MIN = 0.34;
+  const STAIR_Z_MAX = 0.66;
+
+  function worldX(u) {
+    const margin = 0.04;
+    const uu = Math.max(margin, Math.min(1 - margin, u));
+    return -WORLD.platHalf + uu * (2 * WORLD.platHalf);
+  }
+
+  function worldZ(v) {
+    const uu = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, v));
+    const half = WORLD.depth / 2;
+    return -half + uu * WORLD.depth;
+  }
+
+  function inStairZone() {
+    return player.x >= STAIR_X - 0.035 && player.z >= STAIR_Z_MIN - 0.02 && player.z <= STAIR_Z_MAX + 0.02;
+  }
+
+  function stairWorldCenterZ() {
+    return (worldZ(STAIR_Z_MIN) + worldZ(STAIR_Z_MAX)) * 0.5;
+  }
+
+  function stairWorldDepth() {
+    return Math.abs(worldZ(STAIR_Z_MAX) - worldZ(STAIR_Z_MIN)) + 0.12;
+  }
+
+  function playerWorldY() {
+    return player.floor * WORLD.floorH + 0.36;
+  }
+
+  function getLayoutSize() {
+    const r = gameView.getBoundingClientRect();
+    return { w: Math.max(1, r.width), h: Math.max(1, r.height) };
+  }
+
+  function getLayoutHeight() {
+    return getLayoutSize().h;
+  }
+
+  function clearThreeScene() {
+    if (!scene) return;
+    scene.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.geometry?.dispose();
+        const mat = obj.material;
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose && m.dispose());
+        else mat && mat.dispose && mat.dispose();
+      }
+    });
+    while (scene.children.length) scene.remove(scene.children[0]);
+  }
+
+  function makeRescueWorker(T) {
+    const g = new T.Group();
+    const orange = new T.MeshStandardMaterial({ color: 0xc94a0a, roughness: 0.58, metalness: 0.1 });
+    const navy = new T.MeshStandardMaterial({ color: 0x162050, roughness: 0.72 });
+    const neon = new T.MeshStandardMaterial({ color: 0xffe566, roughness: 0.38, metalness: 0.22 });
+    const black = new T.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9, metalness: 0.15 });
+    const rubber = new T.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.95, metalness: 0.05 });
+    const torso = new T.Mesh(new T.BoxGeometry(0.5, 0.54, 0.34), orange);
+    torso.position.y = 0.57;
+    torso.castShadow = true;
+    g.add(torso);
+    const tape = new T.Mesh(new T.BoxGeometry(0.52, 0.08, 0.35), neon);
+    tape.position.set(0, 0.64, 0);
+    tape.castShadow = true;
+    g.add(tape);
+    const tape2 = tape.clone();
+    tape2.position.y = 0.48;
+    tape2.scale.y = 0.65;
+    g.add(tape2);
+    const vest = new T.Mesh(new T.BoxGeometry(0.38, 0.38, 0.36), new T.MeshStandardMaterial({ color: 0xff5a12, roughness: 0.5, metalness: 0.06 }));
+    vest.position.set(0, 0.56, 0.02);
+    vest.castShadow = true;
+    g.add(vest);
+    const radio = new T.Mesh(new T.BoxGeometry(0.12, 0.1, 0.06), new T.MeshStandardMaterial({ color: 0x333344, roughness: 0.55, metalness: 0.35 }));
+    radio.position.set(0.22, 0.62, 0.12);
+    g.add(radio);
+    const ant = new T.Mesh(new T.CylinderGeometry(0.012, 0.012, 0.14, 6), new T.MeshStandardMaterial({ color: 0x888899, metalness: 0.6, roughness: 0.35 }));
+    ant.position.set(0.26, 0.72, 0.12);
+    g.add(ant);
+    const armGeo = new T.CapsuleGeometry(0.07, 0.26, 4, 8);
+    const armL = new T.Mesh(armGeo, orange);
+    armL.position.set(-0.32, 0.58, 0.05);
+    armL.rotation.z = 0.35;
+    armL.castShadow = true;
+    const armR = new T.Mesh(armGeo, orange);
+    armR.position.set(0.32, 0.58, 0.05);
+    armR.rotation.z = -0.35;
+    armR.castShadow = true;
+    g.add(armL, armR);
+    const gloveL = new T.Mesh(new T.SphereGeometry(0.09, 12, 10), rubber);
+    gloveL.position.set(-0.42, 0.42, 0.08);
+    const gloveR = gloveL.clone();
+    gloveR.position.set(0.42, 0.42, 0.08);
+    g.add(gloveL, gloveR);
+    const legGeo = new T.BoxGeometry(0.2, 0.42, 0.24);
+    const leg1 = new T.Mesh(legGeo, navy);
+    leg1.position.set(-0.14, 0.22, 0);
+    leg1.castShadow = true;
+    const leg2 = leg1.clone();
+    leg2.position.x = 0.14;
+    g.add(leg1, leg2);
+    const boot1 = new T.Mesh(new T.BoxGeometry(0.22, 0.14, 0.32), black);
+    boot1.position.set(-0.14, 0.02, 0.04);
+    boot1.castShadow = true;
+    const boot2 = boot1.clone();
+    boot2.position.x = 0.14;
+    g.add(boot1, boot2);
+    const sole = new T.Mesh(new T.BoxGeometry(0.24, 0.04, 0.34), rubber);
+    sole.position.set(-0.14, -0.04, 0.04);
+    const sole2 = sole.clone();
+    sole2.position.x = 0.14;
+    g.add(sole, sole2);
+    const helmMat = new T.MeshStandardMaterial({ color: 0xf5d030, roughness: 0.32, metalness: 0.28 });
+    const helmet = new T.Mesh(new T.SphereGeometry(0.22, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2), helmMat);
+    helmet.position.y = 1.01;
+    helmet.castShadow = true;
+    g.add(helmet);
+    const visor = new T.Mesh(new T.BoxGeometry(0.28, 0.06, 0.18), new T.MeshStandardMaterial({ color: 0x111122, roughness: 0.2, metalness: 0.5, transparent: true, opacity: 0.82 }));
+    visor.position.set(0, 0.92, 0.14);
+    g.add(visor);
+    const brim = new T.Mesh(new T.BoxGeometry(0.28, 0.045, 0.26), neon);
+    brim.position.set(0, 0.9, 0.12);
+    g.add(brim);
+    const pack = new T.Mesh(new T.BoxGeometry(0.34, 0.42, 0.22), new T.MeshStandardMaterial({ color: 0x3a3a48, roughness: 0.78 }));
+    pack.position.set(0, 0.6, -0.26);
+    pack.castShadow = true;
+    g.add(pack);
+    return g;
+  }
+
+  function makePetMesh(kind, T) {
+    const g = new T.Group();
+    const fur = (c) => new T.MeshStandardMaterial({ color: c, roughness: 0.78 });
+    const eye = new T.MeshStandardMaterial({ color: 0x111111, roughness: 0.35 });
+
+    function addSh(m) {
+      m.castShadow = true;
+      return m;
+    }
+
+    switch (kind) {
+      case "hamster": {
+        const body = addSh(new T.Mesh(new T.SphereGeometry(0.15, 16, 14), fur(0xa07040)));
+        g.add(body);
+        const cheek = addSh(new T.Mesh(new T.SphereGeometry(0.08, 12, 10), fur(0xc08860)));
+        cheek.position.set(0.1, -0.02, 0.1);
+        const cheek2 = cheek.clone();
+        cheek2.position.z = -0.1;
+        g.add(cheek, cheek2);
+        const ear = addSh(new T.Mesh(new T.SphereGeometry(0.055, 10, 8), fur(0x8b5a2b)));
+        ear.position.set(-0.11, 0.12, 0);
+        const ear2 = ear.clone();
+        ear2.position.x = 0.11;
+        g.add(ear, ear2);
+        const le = addSh(new T.Mesh(new T.SphereGeometry(0.028, 8, 6), eye));
+        le.position.set(0.08, 0.04, 0.12);
+        const le2 = le.clone();
+        le2.position.z = -0.12;
+        g.add(le, le2);
+        break;
+      }
+      case "fish": {
+        const mat = new T.MeshStandardMaterial({ color: 0x4aa8d8, roughness: 0.32, metalness: 0.18 });
+        const body = addSh(new T.Mesh(new T.SphereGeometry(0.17, 18, 14), mat));
+        body.scale.set(1.45, 0.78, 0.62);
+        g.add(body);
+        const tail = addSh(new T.Mesh(new T.ConeGeometry(0.11, 0.2, 8), new T.MeshStandardMaterial({ color: 0x3388bb, roughness: 0.38 })));
+        tail.rotation.z = Math.PI / 2;
+        tail.position.set(-0.24, 0, 0);
+        g.add(tail);
+        const e1 = addSh(new T.Mesh(new T.SphereGeometry(0.035, 8, 6), eye));
+        e1.position.set(0.16, 0.04, 0.1);
+        const e2 = e1.clone();
+        e2.position.z = -0.1;
+        g.add(e1, e2);
+        break;
+      }
+      case "dog":
+      case "dog_glow": {
+        const mk = kind === "dog_glow"
+          ? new T.MeshStandardMaterial({ color: 0xffdd99, roughness: 0.38, emissive: 0x553311, emissiveIntensity: 0.4 })
+          : fur(0xc2985e);
+        const body = addSh(new T.Mesh(new T.CapsuleGeometry(0.19, 0.34, 6, 12), mk));
+        body.rotation.z = Math.PI / 2;
+        body.position.y = 0.23;
+        g.add(body);
+        const head = addSh(new T.Mesh(new T.SphereGeometry(0.17, 16, 14), fur(0xd4a574)));
+        head.position.set(0.4, 0.34, 0);
+        g.add(head);
+        const snout = addSh(new T.Mesh(new T.BoxGeometry(0.15, 0.11, 0.13), fur(0xa08060)));
+        snout.position.set(0.52, 0.3, 0);
+        g.add(snout);
+        const nose = addSh(new T.Mesh(new T.SphereGeometry(0.045, 10, 8), new T.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 })));
+        nose.position.set(0.6, 0.3, 0);
+        g.add(nose);
+        const ear = addSh(new T.Mesh(new T.BoxGeometry(0.09, 0.14, 0.07), fur(0xa07050)));
+        ear.position.set(0.34, 0.46, 0.11);
+        const ear2 = ear.clone();
+        ear2.position.z = -0.11;
+        g.add(ear, ear2);
+        const le = addSh(new T.Mesh(new T.SphereGeometry(0.03, 8, 6), eye));
+        le.position.set(0.48, 0.38, 0.1);
+        const le2 = le.clone();
+        le2.position.z = -0.1;
+        g.add(le, le2);
+        const tail = addSh(new T.Mesh(new T.CylinderGeometry(0.04, 0.06, 0.28, 8), fur(0xa07050)));
+        tail.position.set(-0.38, 0.32, 0);
+        tail.rotation.z = 0.85;
+        g.add(tail);
+        break;
+      }
+      case "cat":
+      case "cat_star": {
+        const headMat = kind === "cat_star"
+          ? new T.MeshStandardMaterial({ color: 0xc8d0ff, roughness: 0.32, emissive: 0x222255, emissiveIntensity: 0.5 })
+          : fur(0x9999aa);
+        const body = addSh(new T.Mesh(new T.SphereGeometry(0.16, 16, 14), fur(0x888899)));
+        body.scale.set(1.15, 0.88, 0.92);
+        body.position.y = 0.21;
+        g.add(body);
+        const head = addSh(new T.Mesh(new T.SphereGeometry(0.14, 16, 14), headMat));
+        head.position.set(0.34, 0.36, 0);
+        g.add(head);
+        const ear = addSh(new T.Mesh(new T.ConeGeometry(0.065, 0.13, 5), fur(0x888899)));
+        ear.position.set(0.28, 0.48, 0.07);
+        ear.rotation.z = -0.55;
+        const ear2 = ear.clone();
+        ear2.position.z = -0.07;
+        ear2.rotation.z = 0.55;
+        g.add(ear, ear2);
+        const le = addSh(new T.Mesh(new T.SphereGeometry(0.028, 8, 6), new T.MeshStandardMaterial({ color: 0x66ff99, roughness: 0.25 })));
+        le.position.set(0.42, 0.4, 0.1);
+        const le2 = le.clone();
+        le2.position.z = -0.1;
+        g.add(le, le2);
+        const nose = addSh(new T.Mesh(new T.SphereGeometry(0.035, 8, 6), new T.MeshStandardMaterial({ color: 0xffaacc, roughness: 0.45 })));
+        nose.position.set(0.52, 0.34, 0);
+        g.add(nose);
+        for (let i = 0; i < 3; i++) {
+          const w = addSh(new T.Mesh(new T.CylinderGeometry(0.008, 0.008, 0.16, 4), fur(0xcccccc)));
+          w.rotation.z = Math.PI / 2;
+          w.position.set(0.5, 0.32 + i * 0.02, 0.08 + i * 0.02);
+          g.add(w);
+          const w2 = w.clone();
+          w2.position.z *= -1;
+          g.add(w2);
+        }
+        const tail = addSh(new T.Mesh(new T.CylinderGeometry(0.035, 0.05, 0.36, 8), fur(0x888899)));
+        tail.position.set(-0.32, 0.28, 0);
+        tail.rotation.z = -0.7;
+        g.add(tail);
+        break;
+      }
+      case "penguin": {
+        const body = addSh(new T.Mesh(new T.SphereGeometry(0.21, 18, 16), fur(0x1a1a22)));
+        body.scale.set(0.88, 1.12, 0.78);
+        body.position.y = 0.23;
+        g.add(body);
+        const belly = addSh(new T.Mesh(new T.SphereGeometry(0.14, 14, 12), fur(0xf5f5f5)));
+        belly.scale.set(0.72, 1, 0.52);
+        belly.position.set(0.09, 0.21, 0.15);
+        g.add(belly);
+        const beak = addSh(new T.Mesh(new T.ConeGeometry(0.05, 0.12, 6), new T.MeshStandardMaterial({ color: 0xffaa33, roughness: 0.45 })));
+        beak.rotation.z = -Math.PI / 2;
+        beak.position.set(0.22, 0.28, 0);
+        g.add(beak);
+        const le = addSh(new T.Mesh(new T.SphereGeometry(0.028, 8, 6), eye));
+        le.position.set(0.16, 0.32, 0.1);
+        const le2 = le.clone();
+        le2.position.z = -0.1;
+        g.add(le, le2);
+        break;
+      }
+      case "otter": {
+        const body = addSh(new T.Mesh(new T.CapsuleGeometry(0.15, 0.42, 6, 12), fur(0x6b5344)));
+        body.rotation.z = Math.PI / 2;
+        body.position.y = 0.21;
+        g.add(body);
+        const head = addSh(new T.Mesh(new T.SphereGeometry(0.13, 14, 12), fur(0x7a5c4a)));
+        head.position.set(0.38, 0.26, 0);
+        g.add(head);
+        const nose = addSh(new T.Mesh(new T.SphereGeometry(0.04, 8, 6), new T.MeshStandardMaterial({ color: 0x3a2a22, roughness: 0.6 })));
+        nose.position.set(0.48, 0.24, 0);
+        g.add(nose);
+        break;
+      }
+      case "shark": {
+        const sm = new T.MeshStandardMaterial({ color: 0x7a8a9a, roughness: 0.42, metalness: 0.08 });
+        const body = addSh(new T.Mesh(new T.ConeGeometry(0.21, 0.9, 12), sm));
+        body.rotation.z = -Math.PI / 2;
+        body.position.set(0.1, 0.24, 0);
+        g.add(body);
+        const belly = addSh(new T.Mesh(new T.ConeGeometry(0.14, 0.55, 8), new T.MeshStandardMaterial({ color: 0xaab8c8, roughness: 0.5 })));
+        belly.rotation.z = -Math.PI / 2;
+        belly.position.set(0.12, 0.22, 0);
+        belly.scale.set(0.85, 0.6, 0.5);
+        g.add(belly);
+        const fin = addSh(new T.Mesh(new T.BoxGeometry(0.045, 0.2, 0.14), new T.MeshStandardMaterial({ color: 0x556070, roughness: 0.48 })));
+        fin.position.set(-0.06, 0.42, 0);
+        g.add(fin);
+        const tailf = addSh(new T.Mesh(new T.BoxGeometry(0.06, 0.22, 0.04), sm));
+        tailf.position.set(-0.42, 0.28, 0);
+        g.add(tailf);
+        const eyeS = addSh(new T.Mesh(new T.SphereGeometry(0.035, 8, 6), eye));
+        eyeS.position.set(0.38, 0.32, 0.1);
+        const eyeS2 = eyeS.clone();
+        eyeS2.position.z = -0.1;
+        g.add(eyeS, eyeS2);
+        break;
+      }
+      case "dragon": {
+        const sc = new T.MeshStandardMaterial({ color: 0x2d8a52, roughness: 0.52, emissive: 0x0a4020, emissiveIntensity: 0.32 });
+        const body = addSh(new T.Mesh(new T.CapsuleGeometry(0.14, 0.52, 5, 10), sc));
+        body.rotation.z = Math.PI / 2;
+        body.position.y = 0.26;
+        g.add(body);
+        const head = addSh(new T.Mesh(new T.BoxGeometry(0.24, 0.18, 0.2), new T.MeshStandardMaterial({ color: 0x3a9a62, roughness: 0.42 })));
+        head.position.set(0.46, 0.32, 0);
+        g.add(head);
+        const jaw = addSh(new T.Mesh(new T.BoxGeometry(0.16, 0.08, 0.14), sc));
+        jaw.position.set(0.56, 0.26, 0);
+        g.add(jaw);
+        const wing = addSh(new T.Mesh(new T.BoxGeometry(0.38, 0.045, 0.26), new T.MeshStandardMaterial({ color: 0x228855, roughness: 0.55, transparent: true, opacity: 0.88 })));
+        wing.position.set(0, 0.32, 0.18);
+        const wing2 = wing.clone();
+        wing2.position.z = -0.18;
+        g.add(wing, wing2);
+        const tail = addSh(new T.Mesh(new T.CylinderGeometry(0.05, 0.08, 0.45, 8), sc));
+        tail.position.set(-0.48, 0.3, 0);
+        tail.rotation.z = 0.4;
+        g.add(tail);
+        break;
+      }
+      case "unicorn": {
+        const body = addSh(new T.Mesh(new T.SphereGeometry(0.19, 18, 16), new T.MeshStandardMaterial({ color: 0xf8f0ff, roughness: 0.26, metalness: 0.12 })));
+        body.scale.set(1.22, 0.98, 0.88);
+        body.position.y = 0.23;
+        g.add(body);
+        const head = addSh(new T.Mesh(new T.SphereGeometry(0.12, 14, 12), new T.MeshStandardMaterial({ color: 0xfff8ff, roughness: 0.3 })));
+        head.position.set(0.34, 0.38, 0);
+        g.add(head);
+        const horn = addSh(new T.Mesh(new T.ConeGeometry(0.045, 0.26, 10), new T.MeshStandardMaterial({ color: 0xfff0a0, roughness: 0.22, metalness: 0.55 })));
+        horn.position.set(0.36, 0.54, 0);
+        horn.rotation.x = 0.25;
+        g.add(horn);
+        const mane = addSh(new T.Mesh(new T.SphereGeometry(0.1, 12, 10), new T.MeshStandardMaterial({ color: 0xffccee, roughness: 0.55 })));
+        mane.position.set(0.22, 0.44, 0);
+        g.add(mane);
+        break;
+      }
+      default: {
+        const m = addSh(new T.Mesh(new T.BoxGeometry(0.32, 0.3, 0.24), fur(0xaa8866)));
+        m.position.y = 0.17;
+        g.add(m);
+      }
+    }
+    g.scale.multiplyScalar(1.08);
+    return g;
+  }
+
+  function updateKeyVisibility() {
+    if (!keyRoot) return;
+    const show = currentStage?.requiresKey && !keyCollected && keyDrop.floor >= 0;
+    keyRoot.visible = show;
+    if (show) {
+      const kz = keyDrop.z != null ? keyDrop.z : 0.5;
+      keyRoot.position.set(worldX(keyDrop.x), keyDrop.floor * WORLD.floorH + 0.38, worldZ(kz));
+    }
+  }
+
+  function buildWorld3D() {
+    const T = THREE_REF;
+    if (!T) return;
+    if (!scene) {
+      scene = new T.Scene();
+      camera = new T.PerspectiveCamera(58, getLayoutSize().w / getLayoutSize().h, 0.1, 260);
+    }
+    clearThreeScene();
+
+    scene.add(new T.AmbientLight(0x8899aa, 0.48));
+    const sun = new T.DirectionalLight(0xfff5e6, 1.08);
+    sun.position.set(-7, 16, 11);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 40;
+    sun.shadow.camera.left = -14;
+    sun.shadow.camera.right = 14;
+    sun.shadow.camera.top = 20;
+    sun.shadow.camera.bottom = -4;
+    scene.add(sun);
+    const rim = new T.DirectionalLight(0x6688cc, 0.38);
+    rim.position.set(8, 7, -7);
+    scene.add(rim);
+
+    const floorMat = new T.MeshStandardMaterial({ color: 0x3a4556, roughness: 0.85, metalness: 0.05 });
+    for (let f = 0; f < FLOORS; f++) {
+      const y = f * WORLD.floorH;
+      const plat = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2, 0.14, WORLD.depth), floorMat);
+      plat.position.set(0, y, 0);
+      plat.receiveShadow = true;
+      scene.add(plat);
+      if (f < FLOORS - 1) {
+        const sz = stairWorldDepth();
+        const stair = new T.Mesh(new T.BoxGeometry(0.52, WORLD.floorH * 0.92, sz), new T.MeshStandardMaterial({ color: 0xd4a574, roughness: 0.72 }));
+        stair.position.set(worldX(STAIR_X), y + WORLD.floorH * 0.45, stairWorldCenterZ());
+        stair.castShadow = true;
+        scene.add(stair);
+        const railMat = new T.MeshStandardMaterial({ color: 0x8899aa, roughness: 0.55, metalness: 0.2 });
+        const railH = 0.22;
+        const railL = sz * 0.92;
+        const railSide = new T.Mesh(new T.BoxGeometry(0.05, railH, railL), railMat);
+        railSide.position.set(worldX(STAIR_X) + 0.28, y + WORLD.floorH * 0.72, stairWorldCenterZ());
+        const railSide2 = railSide.clone();
+        railSide2.position.x = worldX(STAIR_X) - 0.28;
+        scene.add(railSide, railSide2);
+      }
+      const edgeZ = WORLD.depth / 2 - 0.04;
+      const railLong = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2 - 0.2, 0.1, 0.06), new T.MeshStandardMaterial({ color: 0x5a6578, roughness: 0.75 }));
+      railLong.position.set(0, y + 0.12, edgeZ);
+      const railLong2 = railLong.clone();
+      railLong2.position.z = -edgeZ;
+      scene.add(railLong, railLong2);
+    }
+    const helipad = new T.Mesh(new T.BoxGeometry(1.65, 0.08, 1.25), new T.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.5, emissive: 0x07381a, emissiveIntensity: 0.22 }));
+    helipad.position.set(WORLD.platHalf - 0.95, (FLOORS - 1) * WORLD.floorH + 0.07, 0);
+    helipad.receiveShadow = true;
+    scene.add(helipad);
+    const hMark = new T.Mesh(new T.RingGeometry(0.12, 0.32, 22), new T.MeshBasicMaterial({ color: 0xffffff }));
+    hMark.rotation.x = -Math.PI / 2;
+    hMark.position.set(WORLD.platHalf - 0.95, (FLOORS - 1) * WORLD.floorH + 0.14, 0);
+    scene.add(hMark);
+
+    const hazColor = currentStage?.hazardHex ?? 0x555555;
+    hazardMat = new T.MeshStandardMaterial({
+      color: hazColor,
+      transparent: true,
+      opacity: 0.58,
+      roughness: 0.28,
+      metalness: 0.06,
+      emissive: new T.Color(hazColor),
+      emissiveIntensity: 0.22,
+    });
+    hazardMesh = new T.Mesh(new T.BoxGeometry(WORLD.platHalf * 2 + 0.4, 0.08, WORLD.depth + 0.35), hazardMat);
+    hazardMesh.position.set(0, 0, 0);
+    hazardMesh.receiveShadow = true;
+    scene.add(hazardMesh);
+
+    playerRoot = makeRescueWorker(T);
+    scene.add(playerRoot);
+
+    pets.forEach((p) => {
+      p.mesh = makePetMesh(p.kind, T);
+      scene.add(p.mesh);
+      p.mesh.visible = !p.rescued;
+    });
+
+    keyRoot = new T.Group();
+    const keyRing = new T.Mesh(new T.TorusGeometry(0.08, 0.024, 8, 20), new T.MeshStandardMaterial({ color: 0xffdd66, metalness: 0.75, roughness: 0.22 }));
+    keyRing.rotation.y = Math.PI / 2;
+    const keyStem = new T.Mesh(new T.BoxGeometry(0.06, 0.14, 0.04), new T.MeshStandardMaterial({ color: 0xddcc55, metalness: 0.55, roughness: 0.32 }));
+    keyStem.position.set(0.1, -0.06, 0);
+    keyRoot.add(keyRing, keyStem);
+    scene.add(keyRoot);
+    updateKeyVisibility();
+
+    if (currentStage?.extra === "ice") {
+      iceDecor = new T.Group();
+      for (let i = 0; i < 10; i++) {
+        const ch = new T.Mesh(
+          new T.BoxGeometry(0.32 + (i % 3) * 0.12, 0.05, 0.22),
+          new T.MeshStandardMaterial({ color: 0xd0eeff, roughness: 0.22, transparent: true, opacity: 0.5 }),
+        );
+        ch.position.set((i - 4.5) * 1.05, 0.15, (i % 2) * 0.35 - 0.175);
+        iceDecor.add(ch);
+      }
+      scene.add(iceDecor);
+    } else iceDecor = null;
+
+    const sky = currentStage?.skyHex ?? 0x0d1117;
+    scene.background = new T.Color(sky);
+    scene.fog = new T.Fog(sky, 24, 78);
+  }
+
+  function initRenderer() {
+    THREE_REF = typeof THREE !== "undefined" ? THREE : THREE_REF;
+    const T = THREE_REF;
+    if (!T || renderer) return;
+    const { w, h } = getLayoutSize();
+    renderer = new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFSoftShadowMap;
+    gameView.appendChild(renderer.domElement);
+    inputElement = renderer.domElement;
+    setupInputOnce();
+  }
+
+  function syncThreeFromState() {
+    const T = THREE_REF;
+    if (!T || !playerRoot || !hazardMesh || gameState !== "play") return;
+    const layoutH = getLayoutHeight();
+    const maxHazard = layoutH * 0.92;
+    const hNorm = Math.min(1, hazardY / Math.max(1, maxHazard));
+    const maxWorld = FLOORS * WORLD.floorH + 1.6;
+    const surfY = hNorm * maxWorld;
+    hazardMesh.scale.y = Math.max(0.06, surfY);
+    hazardMesh.position.y = surfY / 2;
+
+    const pz = worldZ(player.z != null ? player.z : 0.5);
+    playerRoot.position.set(worldX(player.x), playerWorldY(), pz);
+    playerRoot.rotation.y = player.facing >= 0 ? -Math.PI * 0.24 : Math.PI * 0.24;
+
+    pets.forEach((p) => {
+      if (!p.mesh) return;
+      p.mesh.visible = !p.rescued;
+      if (!p.rescued) {
+        const petZ = p.z != null ? p.z : 0.5;
+        p.mesh.position.set(worldX(p.x), p.floor * WORLD.floorH + 0.28, worldZ(petZ));
+        p.mesh.rotation.y = Math.sin(anim * 0.04 + p.floor * 0.7 + petZ * 3) * 0.22;
+      }
+    });
+
+    updateKeyVisibility();
+    if (iceDecor && currentStage?.extra === "ice") {
+      iceDecor.position.y = surfY + 0.08;
+      iceDecor.rotation.y = anim * 0.018;
+    }
+
+    const px = playerRoot.position.x;
+    const py = playerRoot.position.y;
+    const pzz = playerRoot.position.z;
+    const focusY = py + 0.68;
+    const flat = camOrbitDist * Math.cos(camOrbitPitch);
+    const cx = px + flat * Math.sin(camOrbitYaw);
+    const cz = pzz + flat * Math.cos(camOrbitYaw);
+    const cy = focusY + camOrbitDist * Math.sin(camOrbitPitch);
+    camera.position.lerp(new T.Vector3(cx, cy, cz), 0.11);
+    camera.lookAt(px, py + 0.58, pzz);
+  }
+
+  function drawMinimap() {
+    if (gameState !== "play") return;
+    const ctx = minimapCtx;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.scale(dpr, dpr);
+    const mx = 38;
+    const my = 14;
+    const mw = 52;
+    const mh = 132;
+    ctx.fillStyle = "rgba(20,26,38,0.96)";
+    ctx.fillRect(mx - 6, my - 4, mw + 12, mh + 8);
+    ctx.strokeStyle = "rgba(88,166,255,0.45)";
+    ctx.strokeRect(mx - 6, my - 4, mw + 12, mh + 8);
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, mw, mh);
+    for (let f = 0; f <= FLOORS; f++) {
+      const t = f / FLOORS;
+      const yy = my + mh * (1 - t);
+      ctx.beginPath();
+      ctx.moveTo(mx, yy);
+      ctx.lineTo(mx + mw, yy);
+      ctx.stroke();
+    }
+    const layoutH = getLayoutHeight();
+    const maxHaz = layoutH * 0.92;
+    const fillH = Math.min(1, hazardY / Math.max(1, maxHaz)) * mh;
+    const hc = currentStage?.hazardHex ?? 0x888888;
+    const r = (hc >> 16) & 255;
+    const gg = (hc >> 8) & 255;
+    const b = hc & 255;
+    const grd = ctx.createLinearGradient(mx, my + mh, mx, my + mh - fillH);
+    grd.addColorStop(0, `rgba(${r},${gg},${b},0.88)`);
+    grd.addColorStop(1, `rgba(${r},${gg},${b},0.3)`);
+    ctx.fillStyle = grd;
+    ctx.fillRect(mx, my + mh - fillH, mw, fillH);
+    ctx.strokeStyle = "rgba(255,255,255,0.92)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mx - 2, my + mh - fillH);
+    ctx.lineTo(mx + mw + 2, my + mh - fillH);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(200,210,230,0.75)";
+    ctx.font = "9px sans-serif";
+    ctx.fillText("災害の高さ ↑", mx, my - 6);
+    const py = my + mh - ((player.floor + 0.42) / FLOORS) * mh;
+    const plz = player.z != null ? player.z : 0.5;
+    const px = mx + 6 + player.x * (mw - 12) + (plz - 0.5) * (mw - 12) * 0.42;
+    const sx0 = mx + 6 + STAIR_X * (mw - 12);
+    ctx.fillStyle = "rgba(210,165,92,0.2)";
+    ctx.fillRect(sx0 - 3, my, 6, mh);
+    ctx.strokeStyle = "rgba(210,165,92,0.45)";
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(sx0 - 3, my, 6, mh);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#58a6ff";
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(230,237,243,0.95)";
+    ctx.font = "bold 8px 'Noto Sans JP',sans-serif";
+    ctx.fillText("隊員", Math.min(mx + mw - 24, px - 10), py - 9);
+    ctx.restore();
+  }
+
+  function renderFrame() {
+    syncThreeFromState();
+    if (renderer && scene && camera) renderer.render(scene, camera);
+    drawMinimap();
+  }
+
+  let touchStart = null;
+  let touchAngle = 0;
+
+  function setupInputOnce() {
+    const el = inputElement;
+    if (!el || el._dprInput) return;
+    el._dprInput = true;
+    el.addEventListener(
+      "touchstart",
+      (e) => {
+        if (gameState !== "play") return;
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+        const rect = el.getBoundingClientRect();
+        touchAngle = Math.atan2(t.clientY - (rect.top + rect.height / 2), t.clientX - (rect.left + rect.width / 2));
+      },
+      { passive: false },
+    );
+    el.addEventListener(
+      "touchmove",
+      (e) => {
+        if (gameState !== "play" || !touchStart) return;
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        const rect = el.getBoundingClientRect();
+        touchAngle = Math.atan2(t.clientY - (rect.top + rect.height / 2), t.clientX - (rect.left + rect.width / 2));
+        player.facing = Math.cos(touchAngle) >= 0 ? 1 : -1;
+      },
+      { passive: false },
+    );
+    el.addEventListener(
+      "touchend",
+      (e) => {
+        if (gameState !== "play" || !touchStart) return;
+        e.preventDefault();
+        const t = e.changedTouches[0] || e.touches[0];
+        const dt = performance.now() - touchStart.t;
+        const dx = t.clientX - touchStart.x;
+        const dy = t.clientY - touchStart.y;
+        touchStart = null;
+        if (dt < 280 && Math.hypot(dx, dy) < 14) {
+          const dir = Math.cos(touchAngle) >= 0 ? 1 : -1;
+          player.facing = dir;
+          const step = 0.14 * getSpeedMult();
+          player.x = Math.max(0.04, Math.min(0.96, player.x + dir * step));
+          afterHorizontalMove(dir);
+          tryRescueNearby();
+          tryPickupKey();
+        }
+      },
+      { passive: false },
+    );
+    el.addEventListener("click", (e) => {
+      if (gameState !== "play") return;
+      const rect = el.getBoundingClientRect();
+      const nx = (e.clientX - rect.left) / rect.width;
+      if (nx < 0.35) moveStep(-1);
+      else if (nx > 0.65) moveStep(1);
+      else tryClimb();
+    });
+    el.addEventListener("contextmenu", (e) => {
+      if (gameState === "play") e.preventDefault();
+    });
+    el.addEventListener(
+      "wheel",
+      (e) => {
+        if (gameState !== "play") return;
+        e.preventDefault();
+        camOrbitDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camOrbitDist + e.deltaY * 0.022));
+      },
+      { passive: false },
+    );
+    el.addEventListener("pointerdown", (e) => {
+      if (gameState !== "play") return;
+      if (e.button === 2 || e.button === 1) {
+        camPointerDrag = { pid: e.pointerId, lx: e.clientX, ly: e.clientY };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch (_) {}
+        e.preventDefault();
+      }
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!camPointerDrag || camPointerDrag.pid !== e.pointerId) return;
+      const dx = e.clientX - camPointerDrag.lx;
+      const dy = e.clientY - camPointerDrag.ly;
+      camPointerDrag.lx = e.clientX;
+      camPointerDrag.ly = e.clientY;
+      camOrbitYaw += dx * 0.0045;
+      camOrbitPitch += dy * 0.0042;
+      camOrbitPitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camOrbitPitch));
+      e.preventDefault();
+    });
+    const endCamDrag = (e) => {
+      if (camPointerDrag && e.pointerId === camPointerDrag.pid) {
+        try {
+          el.releasePointerCapture(e.pointerId);
+        } catch (_) {}
+        camPointerDrag = null;
+      }
+    };
+    el.addEventListener("pointerup", endCamDrag);
+    el.addEventListener("pointercancel", endCamDrag);
+    el.addEventListener("lostpointercapture", () => {
+      camPointerDrag = null;
+    });
+  }
 
   const STAGES = [
-    { id: "quake", name: "地震", place: "3階建ての家", hazard: "外壁崩落", speed: 1, colors: { hazardFill: "rgba(139, 115, 85, 0.55)", sky: "#87a8c4" } },
-    { id: "kaiju", name: "怪獣", place: "ビルディング", hazard: "怪獣の爪", speed: 1.15, colors: { hazardFill: "rgba(107, 45, 92, 0.5)", sky: "#4a3060" } },
-    { id: "tsunami", name: "津波", place: "ホテル", hazard: "水位上昇", speed: 1.25, colors: { hazardFill: "rgba(30, 107, 140, 0.5)", sky: "#5a8faf" } },
-    { id: "fire", name: "火事", place: "建物内", hazard: "炎", speed: 1.1, colors: { hazardFill: "rgba(244, 96, 54, 0.55)", sky: "#3d2a28" } },
-    { id: "crane", name: "クレーン（悪者）", place: "建設現場", hazard: "クレーン追跡", speed: 1.2, colors: { hazardFill: "rgba(90, 90, 95, 0.55)", sky: "#6a7a88" } },
+    {
+      id: "controls_demo",
+      name: "操作デモ（練習）",
+      place: "訓練施設",
+      hazard: "ゆっくり上昇",
+      speed: 0.3,
+      riskRate: 0.36,
+      requiresKey: false,
+      extra: null,
+      tutorial: true,
+      timeLimitSec: 128,
+      colors: { hazardFill: "rgba(110, 150, 195, 0.4)", sky: "#2a3848" },
+      skyHex: 0x1e2836,
+      hazardHex: 0x5c7a9a,
+    },
+    { id: "burning_house", name: "燃え上がる民家", place: "住宅区画", hazard: "炎・崩落", speed: 1.06, riskRate: 1.05, requiresKey: false, extra: null, colors: { hazardFill: "rgba(244, 96, 54, 0.55)", sky: "#4a2818" }, skyHex: 0x3d2415, hazardHex: 0xc0392b },
+    { id: "aqua_tower", name: "沈みゆく水槽ビル", place: "水族館タワー", hazard: "水没", speed: 1.18, riskRate: 1.22, requiresKey: true, extra: null, colors: { hazardFill: "rgba(30, 120, 160, 0.52)", sky: "#3d5a78" }, skyHex: 0x2a4058, hazardHex: 0x1a6b8c },
+    { id: "iceberg", name: "崩れる氷山基地", place: "極寒フィールド", hazard: "氷盤崩落", speed: 1.02, riskRate: 1.08, requiresKey: true, extra: "ice", colors: { hazardFill: "rgba(180, 220, 255, 0.45)", sky: "#2a3d52" }, skyHex: 0x1e3045, hazardHex: 0xa8d8f0 },
+    { id: "storm_station", name: "暴風のターミナル", place: "高架ステーション", hazard: "突風・浸水", speed: 1.12, riskRate: 1.18, requiresKey: false, extra: null, colors: { hazardFill: "rgba(70, 90, 120, 0.5)", sky: "#354050" }, skyHex: 0x283038, hazardHex: 0x5d6d7e },
+    { id: "sealed_lab", name: "封鎖された研究室", place: "地下研究棟", hazard: "冷却損傷", speed: 1.15, riskRate: 1.28, requiresKey: true, extra: "lab", colors: { hazardFill: "rgba(100, 200, 160, 0.4)", sky: "#1e2a24" }, skyHex: 0x152018, hazardHex: 0x58b894 },
   ];
 
   const PET_TIERS = [
-    { maxFloor: 0, label: "コモン", pets: [{ emoji: "🐹", name: "ハムスター" }, { emoji: "🦔", name: "ハリネズミ" }] },
-    { maxFloor: 1, label: "ノーマル", pets: [{ emoji: "🐕", name: "犬" }, { emoji: "🐈", name: "猫" }, { emoji: "🐦", name: "鳥" }] },
-    { maxFloor: 2, label: "レア", pets: [{ emoji: "✨🐕", name: "光る犬" }, { emoji: "✨🐈", name: "光る猫" }] },
-    { maxFloor: 3, label: "超レア", pets: [{ emoji: "✨🐕‍🪽", name: "羽の光る犬" }] },
-    { maxFloor: 99, label: "伝説", pets: [{ emoji: "🐉", name: "ドラゴン" }, { emoji: "✨🐺", name: "光る狼" }] },
+    { maxFloor: 0, label: "ノーマル", rankId: "normal", pets: [{ emoji: "🐹", name: "ハムスター", kind: "hamster" }, { emoji: "🐠", name: "金魚", kind: "fish" }] },
+    { maxFloor: 1, label: "レア", rankId: "rare", pets: [{ emoji: "🐕", name: "犬", kind: "dog" }, { emoji: "🐈", name: "猫", kind: "cat" }, { emoji: "🐧", name: "ペンギン", kind: "penguin" }] },
+    { maxFloor: 2, label: "エピック", rankId: "epic", pets: [{ emoji: "✨🐕", name: "光る犬", kind: "dog_glow" }, { emoji: "🦦", name: "カワウソ", kind: "otter" }] },
+    { maxFloor: 3, label: "レジェンド", rankId: "legend", pets: [{ emoji: "✨🐈‍⬛", name: "星猫", kind: "cat_star" }, { emoji: "🦈", name: "子サメ", kind: "shark" }] },
+    { maxFloor: 99, label: "神話 Mythic", rankId: "mythic", pets: [{ emoji: "🐉", name: "ミニ竜", kind: "dragon" }, { emoji: "🦄", name: "一角獣", kind: "unicorn" }] },
   ];
+
+  const MUTATION_STAGES = ["—", "銀", "ダイヤ", "エメラルド", "レインボー"];
 
   function tierForFloor(floorIndex) {
     let t = PET_TIERS[0];
@@ -357,26 +1218,61 @@
     return t;
   }
 
-  function randomPetForFloor(floorIndex) {
+  function petPayloadForFloor(floorIndex) {
     const t = tierForFloor(floorIndex);
-    return t.pets[Math.floor(Math.random() * t.pets.length)];
+    const p = t.pets[Math.floor(Math.random() * t.pets.length)];
+    return { emoji: p.emoji, name: p.name, rankId: t.rankId, rankLabel: t.label, kind: p.kind || "dog" };
   }
 
-  const STORAGE_KEY = "pet_rescue_demo_v1";
-  function loadSave() {
-    try {
-      const j = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      return {
-        coins: Number(j.coins) || 0,
-        hasSlowMachine: !!j.hasSlowMachine,
-      };
-    } catch (_) {
-      return { coins: 0, hasSlowMachine: false };
-    }
+  const STORAGE_KEY = "disaster_pet_rescue_demo_v2";
+  const LEGACY_STORAGE_KEY = "pet_rescue_demo_v1";
+
+  function defaultSave() {
+    return {
+      coins: 0,
+      hasSlowMachine: false,
+      speedCoilLevel: 0,
+      habitatLevel: 1,
+      inventory: [],
+      foodStock: { apple: 2, plankton: 1, bone: 0, meat: 0 },
+    };
   }
+
+  function loadSave() {
+    let j = null;
+    try {
+      j = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    } catch (_) { j = null; }
+    if (!j || typeof j !== "object") {
+      try {
+        const old = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || "{}");
+        j = defaultSave();
+        j.coins = Number(old.coins) || 0;
+        j.hasSlowMachine = !!old.hasSlowMachine;
+      } catch (_) {
+        j = defaultSave();
+      }
+    }
+    const d = defaultSave();
+    return {
+      coins: Number(j.coins) || 0,
+      hasSlowMachine: !!j.hasSlowMachine,
+      speedCoilLevel: Math.min(5, Math.max(0, Number(j.speedCoilLevel) || 0)),
+      habitatLevel: Math.min(8, Math.max(1, Number(j.habitatLevel) || 1)),
+      inventory: Array.isArray(j.inventory) ? j.inventory : [],
+      foodStock: {
+        apple: Math.max(0, Number(j.foodStock?.apple) || d.foodStock.apple),
+        plankton: Math.max(0, Number(j.foodStock?.plankton) || d.foodStock.plankton),
+        bone: Math.max(0, Number(j.foodStock?.bone) || d.foodStock.bone),
+        meat: Math.max(0, Number(j.foodStock?.meat) || d.foodStock.meat),
+      },
+    };
+  }
+
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
   }
+
   let save = loadSave();
 
   let currentStage = null;
@@ -388,18 +1284,62 @@
   let hazardSpeed = 0;
   let timeLeft = TIME_LIMIT_SEC;
   let lastTs = 0;
-  let player = { floor: 0, x: 0.5, facing: 1 };
+  let player = { floor: 0, x: 0.5, z: 0.5, facing: 1 };
   let pets = [];
   let keys = {};
   let slowBuffUntil = 0;
   let anim = 0;
+  const CAM_PITCH_MIN = 0.24;
+  const CAM_PITCH_MAX = 1.14;
+  const CAM_DIST_MIN = 10.5;
+  const CAM_DIST_MAX = 27;
+  let camOrbitYaw = Math.atan2(-5.5, 10.8);
+  let camOrbitPitch = 0.46;
+  let camOrbitDist = 16.8;
+  let camPointerDrag = null;
+
+  function resetCameraOrbit() {
+    camOrbitYaw = Math.atan2(-5.5, 10.8);
+    camOrbitPitch = 0.46;
+    camOrbitDist = 16.8;
+    camPointerDrag = null;
+  }
+
+  let riskPct = 0;
+  let keyCollected = false;
+  let keyDrop = { floor: 0, x: 0.5, z: 0.5 };
+  let climbCooldown = 0;
+
+  function getSpeedMult() {
+    return 1 + save.speedCoilLevel * 0.14;
+  }
+
+  function canAscendFromCurrentFloor() {
+    if (player.floor >= FLOORS - 1) return false;
+    if (!currentStage?.requiresKey) return true;
+    if (player.floor === 0) return true;
+    return keyCollected;
+  }
+
+  function tryPickupKey() {
+    if (keyCollected || !currentStage?.requiresKey) return;
+    if (player.floor !== keyDrop.floor) return;
+    const kz = keyDrop.z != null ? keyDrop.z : 0.5;
+    if (Math.hypot(player.x - keyDrop.x, player.z - kz) > 0.16) return;
+    keyCollected = true;
+    riskPct = Math.max(0, riskPct - 8);
+  }
 
   function resize() {
-    const r = canvas.parentElement.getBoundingClientRect();
+    const { w, h } = getLayoutSize();
+    if (renderer && camera) {
+      renderer.setSize(w, h);
+      camera.aspect = w / Math.max(1, h);
+      camera.updateProjectionMatrix();
+    }
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.floor(r.width * dpr);
-    canvas.height = Math.floor(r.height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    minimapCanvas.width = Math.floor(116 * dpr);
+    minimapCanvas.height = Math.floor(168 * dpr);
   }
   window.addEventListener("resize", resize);
 
@@ -413,30 +1353,51 @@
     document.getElementById("hud").classList.toggle("hidden", !visible);
     document.getElementById("play-hint").classList.toggle("hidden", !visible);
     document.getElementById("touch-pad").classList.toggle("visible", !!visible);
+    minimapWrap.classList.toggle("hidden", !visible);
   }
 
-  const STAIR_X = 0.88;
   const MOVE_STEP = 0.12;
   const MARGIN_X = 0.04;
 
+  function clampBlockedStairs() {
+    if (canAscendFromCurrentFloor()) return;
+    if (player.floor < 1) return;
+    if (inStairZone()) player.x = Math.min(player.x, STAIR_X - 0.07);
+  }
+
+  function afterHorizontalMove() {
+    clampBlockedStairs();
+  }
+
   function moveStep(dir) {
     if (gameState !== "play") return;
+    const sm = getSpeedMult();
     player.facing = dir >= 0 ? 1 : -1;
-    player.x = Math.max(MARGIN_X, Math.min(1 - MARGIN_X, player.x + dir * MOVE_STEP));
-    if (player.floor < FLOORS - 1 && player.x >= STAIR_X && dir > 0) {
-      player.floor += 1;
-      player.x = 0.2;
-    }
+    player.x = Math.max(MARGIN_X, Math.min(1 - MARGIN_X, player.x + dir * MOVE_STEP * sm));
+    afterHorizontalMove();
     tryRescueNearby();
+    tryPickupKey();
+  }
+
+  function moveStepZ(towardCamera) {
+    if (gameState !== "play") return;
+    const sm = getSpeedMult();
+    const dz = MOVE_STEP * sm * (towardCamera ? 1 : -1);
+    player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z + dz));
+    clampBlockedStairs();
+    tryRescueNearby();
+    tryPickupKey();
   }
 
   function tryClimb() {
     if (gameState !== "play") return;
-    if (player.floor < FLOORS - 1 && player.x >= STAIR_X) {
-      player.floor += 1;
-      player.x = 0.2;
-      tryRescueNearby();
-    }
+    if (!inStairZone() || !canAscendFromCurrentFloor()) return;
+    if (player.floor >= FLOORS - 1) return;
+    player.floor += 1;
+    player.x = 0.22;
+    player.z = 0.5;
+    tryRescueNearby();
+    tryPickupKey();
   }
 
   function buildStageGrid() {
@@ -445,51 +1406,187 @@
     STAGES.forEach((s) => {
       const div = document.createElement("div");
       div.className = "stage-card";
-      div.innerHTML = `<strong>${s.name}</strong><span>${s.place} · ${s.hazard}（速度×${s.speed}）</span>`;
+      const tag = s.tutorial ? " · 練習" : s.requiresKey ? " · 🗝鍵" : "";
+      div.innerHTML = `<strong>${s.name}</strong><span>${s.place} · ${s.hazard}${tag}（災害×${s.speed} リスク×${s.riskRate}）</span>`;
       div.addEventListener("click", () => startStage(s));
       grid.appendChild(div);
     });
   }
 
-  const SHOP_ITEMS = [
-    { id: "slow", name: "遅くするマシン", price: 80, desc: "災害の進行を一時的に遅くする（投げる）" },
-    { id: "time", name: "時間延長", price: 50, desc: "デモ未実装（今後）" },
-    { id: "cage", name: "大きなケージ", price: 120, desc: "デモ未実装（今後）" },
-  ];
+  function nextCoilPrice() {
+    return 65 + save.speedCoilLevel * 45;
+  }
+
+  function nextHabitatPrice() {
+    return 90 + save.habitatLevel * 55;
+  }
 
   function refreshShopUI() {
     document.getElementById("coin-display").textContent = String(save.coins);
     const list = document.getElementById("shop-list");
     list.innerHTML = "";
-    SHOP_ITEMS.forEach((item) => {
+
+    function addRow(name, desc, priceLabel, onBuy, disabled) {
       const row = document.createElement("div");
       row.className = "shop-item";
       const left = document.createElement("div");
-      left.innerHTML = `<strong>${item.name}</strong><br><span style="color:var(--muted);font-size:0.82rem;">${item.desc}</span>`;
+      left.innerHTML = `<strong>${name}</strong><br><span style="color:var(--muted);font-size:0.82rem;">${desc}</span>`;
       const btn = document.createElement("button");
       btn.className = "btn-primary";
       btn.style.width = "auto";
-      if (item.id === "slow" && save.hasSlowMachine) {
-        btn.textContent = "所持済み";
-        btn.disabled = true;
-      } else if (item.id !== "slow") {
-        btn.textContent = `${item.price}（準備中）`;
-        btn.disabled = true;
-      } else {
-        btn.textContent = `${item.price} コイン`;
-        btn.addEventListener("click", () => {
-          if (save.coins >= item.price) {
-            save.coins -= item.price;
-            save.hasSlowMachine = true;
-            saveState();
-            refreshShopUI();
-          }
-        });
-      }
+      btn.textContent = priceLabel;
+      btn.disabled = !!disabled;
+      btn.addEventListener("click", () => { if (!btn.disabled) onBuy(); });
       row.appendChild(left);
       row.appendChild(btn);
       list.appendChild(row);
+    }
+
+    addRow(
+      "遅くするマシン",
+      "ミッション中「投げる」— 災害とリスク上昇をしばらく遅くする",
+      save.hasSlowMachine ? "所持済み" : "80 コイン",
+      () => {
+        if (save.hasSlowMachine || save.coins < 80) return;
+        save.coins -= 80;
+        save.hasSlowMachine = true;
+        saveState();
+        refreshShopUI();
+      },
+      save.hasSlowMachine,
+    );
+
+    const coilMaxed = save.speedCoilLevel >= 5;
+    const coilP = nextCoilPrice();
+    addRow(
+      "レインボースピードコイル",
+      "移動が速くなり、奥の階へたどり着きやすい（デモ）",
+      coilMaxed ? "MAX" : `${coilP} コイン`,
+      () => {
+        if (coilMaxed || save.coins < coilP) return;
+        save.coins -= coilP;
+        save.speedCoilLevel += 1;
+        saveState();
+        refreshShopUI();
+      },
+      coilMaxed,
+    );
+
+    const habMaxed = save.habitatLevel >= 8;
+    const habP = nextHabitatPrice();
+    addRow(
+      "飼育スペース拡張",
+      "拠点の収容上限が増える（レベル×6匹まで表示）",
+      habMaxed ? "MAX" : `${habP} コイン`,
+      () => {
+        if (habMaxed || save.coins < habP) return;
+        save.coins -= habP;
+        save.habitatLevel += 1;
+        saveState();
+        refreshShopUI();
+      },
+      habMaxed,
+    );
+
+    addRow("餌・リンゴ ×3", "拠点で小型ペット向け", "22 コイン", () => {
+      if (save.coins < 22) return;
+      save.coins -= 22;
+      save.foodStock.apple += 3;
+      saveState();
+      refreshShopUI();
     });
+
+    addRow("餌・プランクトン ×3", "水棲系に効きやすい（デモ）", "30 コイン", () => {
+      if (save.coins < 30) return;
+      save.coins -= 30;
+      save.foodStock.plankton += 3;
+      saveState();
+      refreshShopUI();
+    });
+
+    addRow("餌・骨 ×3", "犬・大型向け", "28 コイン", () => {
+      if (save.coins < 28) return;
+      save.coins -= 28;
+      save.foodStock.bone += 3;
+      saveState();
+      refreshShopUI();
+    });
+
+    addRow("餌・肉 ×3", "高エネルギー", "35 コイン", () => {
+      if (save.coins < 35) return;
+      save.coins -= 35;
+      save.foodStock.meat += 3;
+      saveState();
+      refreshShopUI();
+    });
+  }
+
+  function mutationIndexFromPet(pet) {
+    const m = Number(pet.mutationStage) || 0;
+    return Math.min(MUTATION_STAGES.length - 1, Math.max(0, m));
+  }
+
+  function tryMutateOnFeed(pet) {
+    const idx = mutationIndexFromPet(pet);
+    if (idx >= MUTATION_STAGES.length - 1) return;
+    const chance = 0.14 + Math.min(0.12, pet.feedCount * 0.01);
+    if (Math.random() < chance) pet.mutationStage = idx + 1;
+  }
+
+  function feedPet(petId, foodKey) {
+    if (save.foodStock[foodKey] <= 0) return;
+    const pet = save.inventory.find((p) => p.id === petId);
+    if (!pet) return;
+    save.foodStock[foodKey] -= 1;
+    pet.feedCount = (pet.feedCount || 0) + 1;
+    tryMutateOnFeed(pet);
+    saveState();
+    refreshBaseUI();
+  }
+
+  function refreshBaseUI() {
+    document.getElementById("base-coin-display").textContent = String(save.coins);
+    document.getElementById("habitat-lv").textContent = String(save.habitatLevel);
+    const cap = save.habitatLevel * 6;
+    document.getElementById("habitat-cap").textContent = String(cap);
+    const box = document.getElementById("base-pet-list");
+    box.innerHTML = "";
+    const shown = save.inventory.slice(0, cap);
+    if (shown.length === 0) {
+      box.innerHTML = "<p class=\"subtitle\" style=\"text-align:center;\">まだ誰もいません。レスキューで脱出成功すると仲間が増えます。</p>";
+      return;
+    }
+    const foodMap = [
+      { key: "apple", label: "リンゴ" },
+      { key: "plankton", label: "プランクトン" },
+      { key: "bone", label: "骨" },
+      { key: "meat", label: "肉" },
+    ];
+    shown.forEach((pet) => {
+      const row = document.createElement("div");
+      row.className = "pet-row";
+      const mi = mutationIndexFromPet(pet);
+      const mutLabel = MUTATION_STAGES[mi];
+      row.innerHTML = `<div><span style="font-size:1.35rem;">${pet.emoji}</span> <strong>${pet.name}</strong> · ${pet.rankLabel || pet.rankId || ""}<br><span class="meta">変異: <strong>${mutLabel}</strong> · えさ回数 ${pet.feedCount || 0}</span></div><div class="feed-row" data-pet-id="${pet.id}"></div>`;
+      const fr = row.querySelector(".feed-row");
+      foodMap.forEach((f) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn-secondary";
+        b.textContent = `${f.label} (${save.foodStock[f.key]})`;
+        b.disabled = save.foodStock[f.key] <= 0;
+        b.addEventListener("click", () => feedPet(pet.id, f.key));
+        fr.appendChild(b);
+      });
+      box.appendChild(row);
+    });
+    if (save.inventory.length > cap) {
+      const more = document.createElement("p");
+      more.className = "subtitle";
+      more.style.textAlign = "center";
+      more.textContent = `あと ${save.inventory.length - cap} 匹はショップで拠点拡張すると表示されます（デモ）。`;
+      box.appendChild(more);
+    }
   }
 
   function startStage(stage) {
@@ -499,40 +1596,72 @@
     setPlayUI(true);
     hazardY = 0;
     hazardSpeed = 18 * stage.speed;
-    timeLeft = TIME_LIMIT_SEC;
-    player = { floor: 0, x: 0.35, facing: 1 };
+    timeLeft = stage.timeLimitSec != null ? stage.timeLimitSec : TIME_LIMIT_SEC;
+    riskPct = 0;
+    player = { floor: 0, x: 0.35, z: 0.5, facing: 1 };
     slowBuffUntil = 0;
+    climbCooldown = 0;
+    resetCameraOrbit();
+    keyCollected = false;
+    if (stage.requiresKey) {
+      keyDrop = {
+        floor: Math.floor(Math.random() * 2),
+        x: 0.18 + Math.random() * 0.55,
+        z: MARGIN_Z + Math.random() * (1 - 2 * MARGIN_Z),
+      };
+    } else {
+      keyDrop = { floor: -1, x: 0, z: 0.5 };
+    }
     pets = [];
     for (let f = 0; f < FLOORS; f++) {
-      const count = f <= 1 ? 2 : f === 2 ? 2 : 1;
+      let count;
+      if (stage.tutorial) {
+        count = f <= 1 ? 2 : f === 2 ? 1 : 0;
+      } else {
+        count = f <= 1 ? 2 : f === 2 ? 2 : 1;
+      }
       for (let i = 0; i < count; i++) {
-        const p = randomPetForFloor(f);
+        const spec = petPayloadForFloor(f);
         pets.push({
           floor: f,
           x: 0.15 + Math.random() * 0.7,
-          emoji: p.emoji,
-          name: p.name,
+          z: MARGIN_Z + Math.random() * (1 - 2 * MARGIN_Z),
+          emoji: spec.emoji,
+          name: spec.name,
+          rankId: spec.rankId,
+          rankLabel: spec.rankLabel,
+          kind: spec.kind,
+          mesh: null,
           rescued: false,
         });
       }
     }
     document.getElementById("hud-stage").textContent = stage.name;
-    document.getElementById("play-hint").textContent =
-      "下の ◀ ↑ ▶ でも操作できます。キー: ←→ 移動 / 右端で ↑ または W で上の階。いつでも「ヘリで脱出」で成功（デモ）。";
+    document.getElementById("play-hint").textContent = stage.tutorial
+      ? "【練習】←→／A・D で左右、W・S または 手前・奥 で奥行き。右奥の階段付近で ↑ で上の階。ペットに近づくと救出。断面モニタで位置確認。PCは Q・E・右ドラッグ・ホイールで視点。慣れたら本番ステージへ。"
+      : "右下「断面モニタ」で災害の高さと隊員位置を確認。リスク100%で崩壊。鍵は拾ってから上の階へ。◀↑▶／キー。PCは Q・E・右ドラッグ・ホイールで視点。脱出で拠点に追加。";
     document.getElementById("btn-slow").style.display = save.hasSlowMachine ? "inline-block" : "none";
+    const hk = document.getElementById("hud-key");
+    if (stage.requiresKey) {
+      hk.classList.remove("hidden");
+      hk.textContent = "🗝 未発見";
+    } else {
+      hk.classList.add("hidden");
+    }
     resize();
     function beginPlay() {
       resize();
-      const cssH = canvas.getBoundingClientRect().height;
-      const cssW = canvas.getBoundingClientRect().width;
-      if (cssH < 80 || cssW < 80) {
+      const r = gameView.getBoundingClientRect();
+      if (r.height < 80 || r.width < 80) {
         requestAnimationFrame(beginPlay);
         return;
       }
+      initRenderer();
+      buildWorld3D();
       lastTs = performance.now();
       update(0);
       stepSimulation(0);
-      draw();
+      renderFrame();
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(beginPlay);
@@ -545,142 +1674,14 @@
     return bottom - floorIndex * gap;
   }
 
-  function platformLeft(w) {
-    return w * 0.08;
-  }
-  function platformRight(w) {
-    return w * 0.92;
-  }
-
-  function draw() {
-    const w = canvas.width / (window.devicePixelRatio || 1);
-    const h = canvas.height / (window.devicePixelRatio || 1);
-    const sky = currentStage?.colors.sky || "#333";
-    const hzFill = currentStage?.colors.hazardFill || "rgba(80,80,90,0.5)";
-
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, sky);
-    g.addColorStop(1, "#0a0e14");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
-    for (let i = 0; i < 6; i++) {
-      ctx.fillRect((w / 6) * i + (anim % 40) * 0.2, 0, 1, h);
-    }
-
-    const pxL = platformLeft(w);
-    const pxR = platformRight(w);
-
-    for (let f = 0; f < FLOORS; f++) {
-      const y = floorY(h, f);
-      ctx.strokeStyle = "rgba(255,255,255,0.35)";
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(pxL, y);
-      ctx.lineTo(pxR, y);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(22,27,34,0.65)";
-      ctx.fillRect(pxL, y, pxR - pxL, 10);
-
-      const floorLabel = f === FLOORS - 1 ? "屋上・ヘリ" : `${f + 1}階`;
-      ctx.font = "bold 12px 'Noto Sans JP',sans-serif";
-      ctx.fillStyle = "rgba(230,237,243,0.9)";
-      ctx.textAlign = "left";
-      ctx.fillText(floorLabel, pxL + 4, y - 6);
-
-      if (f < FLOORS - 1) {
-        const yNext = floorY(h, f + 1);
-        ctx.strokeStyle = "rgba(255, 200, 120, 0.85)";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(pxR - 5, y);
-        ctx.lineTo(pxR - 5, yNext);
-        ctx.stroke();
-        ctx.fillStyle = "rgba(255, 200, 120, 0.95)";
-        ctx.font = "bold 11px 'Noto Sans JP',sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText("階段↑", pxR - 10, (y + yNext) * 0.5);
-      }
-    }
-
-    const helipadY = floorY(h, FLOORS - 1);
-    ctx.fillStyle = "rgba(63, 185, 80, 0.35)";
-    ctx.fillRect(pxR - 72, helipadY - 30, 68, 30);
-    ctx.strokeStyle = "rgba(63, 185, 80, 0.9)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(pxR - 72, helipadY - 30, 68, 30);
-    ctx.fillStyle = "#3fb950";
-    ctx.font = "bold 11px 'Noto Sans JP',sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("脱出", pxR - 38, helipadY - 10);
-
-    ctx.fillStyle = hzFill;
-    ctx.fillRect(0, h - hazardY, w, hazardY);
-
-    const hazardTop = h - hazardY;
-    if (hazardY > 2) {
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(0, hazardTop);
-      ctx.lineTo(w, hazardTop);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255, 80, 80, 0.95)";
-      ctx.font = "bold 13px 'Noto Sans JP',sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("← 災害（これが届くと失敗）", 10, Math.max(24, hazardTop - 8));
-    } else {
-      ctx.fillStyle = "rgba(255, 200, 100, 0.9)";
-      ctx.font = "bold 12px 'Noto Sans JP',sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("下から災害がせり上がります", 10, h - 16);
-    }
-
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.fillRect(0, hazardTop - 5, w, 5);
-
-    if (currentStage?.id === "kaiju") {
-      ctx.fillStyle = "rgba(107, 45, 92, 0.4)";
-      ctx.beginPath();
-      ctx.arc(w * 0.5 + Math.sin(anim * 0.04) * 40, hazardTop - 18, 36, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    pets.forEach((p) => {
-      if (p.rescued) return;
-      const y = floorY(h, p.floor) - 18;
-      const x = pxL + (pxR - pxL) * p.x;
-      ctx.font = "22px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(p.emoji, x, y);
-    });
-
-    const py = floorY(h, player.floor) - 14;
-    const pxx = pxL + (pxR - pxL) * player.x;
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(pxx, py, 12, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "#58a6ff";
-    ctx.beginPath();
-    ctx.arc(pxx, py, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(pxx + player.facing * 8 - 2, py - 3, 6, 4);
-    ctx.fillStyle = "rgba(230,237,243,0.95)";
-    ctx.font = "bold 11px 'Noto Sans JP',sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("隊員（あなた）", pxx, py + 22);
-  }
-
   function stepSimulation(dt) {
-    const h = canvas.height / (window.devicePixelRatio || 1);
+    const h = getLayoutHeight();
     if (h < 80) return null;
     const slowMul = performance.now() < slowBuffUntil ? 0.45 : 1;
     const maxHazard = h * 0.92;
     hazardY = Math.min(maxHazard, hazardY + hazardSpeed * slowMul * dt);
+
+    if (riskPct >= 100) return "lose_risk";
 
     const playerWorldY = floorY(h, player.floor);
     const hazardTopY = h - hazardY;
@@ -690,114 +1691,138 @@
   }
 
   function tryRescueNearby() {
-    const reach = 0.12;
+    const reach = 0.14;
     pets.forEach((p) => {
       if (p.rescued) return;
-      if (p.floor === player.floor && Math.abs(p.x - player.x) < reach) p.rescued = true;
+      const pz = p.z != null ? p.z : 0.5;
+      const plz = player.z != null ? player.z : 0.5;
+      if (p.floor === player.floor && Math.hypot(p.x - player.x, pz - plz) < reach) {
+        p.rescued = true;
+        if (p.mesh) p.mesh.visible = false;
+      }
     });
   }
 
   function update(dt) {
     timeLeft -= dt;
     anim += dt * 60;
-    const w = canvas.width / (window.devicePixelRatio || 1);
-    const pxL = platformLeft(w);
-    const pxR = platformRight(w);
+    const sm = getSpeedMult();
     const margin = 0.04;
-    const step = 0.08 * (dt * 60);
-    const stairX = STAIR_X;
+    const step = 0.08 * sm * (dt * 60);
 
+    let movedDir = 0;
     if (keys["ArrowLeft"] || keys["a"] || keys["A"]) {
       player.x = Math.max(margin, player.x - step);
       player.facing = -1;
-    }
-    if (keys["ArrowRight"] || keys["d"] || keys["D"]) {
+      movedDir = -1;
+    } else if (keys["ArrowRight"] || keys["d"] || keys["D"]) {
       player.x = Math.min(1 - margin, player.x + step);
       player.facing = 1;
+      movedDir = 1;
     }
-    if (keys["ArrowUp"] || keys["w"] || keys["W"]) {
-      if (player.floor < FLOORS - 1 && player.x >= stairX) {
-        player.floor += 1;
-        player.x = 0.2;
-      }
+    if (movedDir !== 0) afterHorizontalMove(movedDir);
+
+    const zStep = 0.08 * sm * (dt * 60);
+    if (keys["w"] || keys["W"]) {
+      player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z + zStep));
+      clampBlockedStairs();
+      tryRescueNearby();
+      tryPickupKey();
+    }
+    if (keys["s"] || keys["S"]) {
+      player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z - zStep));
+      clampBlockedStairs();
+      tryRescueNearby();
+      tryPickupKey();
     }
 
+    if (keys["q"] || keys["Q"]) camOrbitYaw += 2.15 * dt;
+    if (keys["e"] || keys["E"]) camOrbitYaw -= 2.15 * dt;
+
+    climbCooldown = Math.max(0, climbCooldown - dt);
+    if (keys["ArrowUp"] && climbCooldown <= 0 && inStairZone() && canAscendFromCurrentFloor() && player.floor < FLOORS - 1) {
+      player.floor += 1;
+      player.x = 0.22;
+      player.z = 0.5;
+      climbCooldown = 0.32;
+      tryRescueNearby();
+      tryPickupKey();
+    }
+
+    const slowMul = performance.now() < slowBuffUntil ? 0.52 : 1;
+    const rr = (currentStage?.riskRate || 1) * 2.35;
+    riskPct = Math.min(100, riskPct + rr * slowMul * dt);
+
     tryRescueNearby();
+    tryPickupKey();
+
+    const hk = document.getElementById("hud-key");
+    if (currentStage?.requiresKey) {
+      hk.classList.remove("hidden");
+      hk.textContent = keyCollected ? "🗝 解放" : "🗝 未発見";
+    }
 
     const rescued = pets.filter((p) => p.rescued);
     document.getElementById("hud-floor").textContent = `${player.floor + 1}階`;
     document.getElementById("hud-pets").textContent = `救出 ${rescued.length}/${pets.length}`;
     document.getElementById("hud-time").textContent = `残り ${Math.max(0, Math.ceil(timeLeft))}秒`;
+    const hr = document.getElementById("hud-risk");
+    hr.textContent = `リスク ${Math.floor(riskPct)}%`;
+    hr.classList.remove("risk-high", "risk-max");
+    if (riskPct >= 85) hr.classList.add("risk-max");
+    else if (riskPct >= 55) hr.classList.add("risk-high");
   }
-
-  let touchStart = null;
-  let touchAngle = 0;
-
-  canvas.addEventListener("touchstart", (e) => {
-    if (gameState !== "play") return;
-    e.preventDefault();
-    const t = e.changedTouches[0];
-    touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
-    const rect = canvas.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    touchAngle = Math.atan2(t.clientY - cy, t.clientX - cx);
-  }, { passive: false });
-
-  canvas.addEventListener("touchmove", (e) => {
-    if (gameState !== "play" || !touchStart) return;
-    e.preventDefault();
-    const t = e.changedTouches[0];
-    const rect = canvas.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    touchAngle = Math.atan2(t.clientY - cy, t.clientX - cx);
-    player.facing = Math.cos(touchAngle) >= 0 ? 1 : -1;
-  }, { passive: false });
-
-  canvas.addEventListener("touchend", (e) => {
-    if (gameState !== "play" || !touchStart) return;
-    e.preventDefault();
-    const t = e.changedTouches[0] || e.touches[0];
-    const dt = performance.now() - touchStart.t;
-    const dx = t.clientX - touchStart.x;
-    const dy = t.clientY - touchStart.y;
-    touchStart = null;
-    if (dt < 280 && Math.hypot(dx, dy) < 14) {
-      const w = canvas.width / (window.devicePixelRatio || 1);
-      const dir = Math.cos(touchAngle) >= 0 ? 1 : -1;
-      player.facing = dir;
-      const step = 0.14;
-      player.x = Math.max(0.04, Math.min(0.96, player.x + dir * step));
-      const stairX = 0.88;
-      if (player.floor < FLOORS - 1 && player.x >= stairX && dir > 0) {
-        player.floor += 1;
-        player.x = 0.2;
-      }
-      tryRescueNearby();
-    }
-  }, { passive: false });
 
   function endGame(won, reason) {
     gameState = "result";
     setPlayUI(false);
     const rescued = pets.filter((p) => p.rescued);
-    const coinsEarned = won
-      ? Math.floor(20 + rescued.length * 15 + rescued.reduce((a, p) => a + p.floor * 8, 0))
-      : Math.floor(rescued.length * 10);
+    const isTutorial = !!currentStage?.tutorial;
+    let coinsEarned;
+    if (won) {
+      if (isTutorial) {
+        coinsEarned = 12 + rescued.length * 5;
+      } else {
+        coinsEarned = Math.floor(20 + rescued.length * 15 + rescued.reduce((a, p) => a + p.floor * 8, 0));
+      }
+    } else {
+      coinsEarned = Math.floor(rescued.length * 10);
+    }
     save.coins += coinsEarned;
+    if (won && !isTutorial) {
+      const baseId = performance.now();
+      rescued.forEach((p, i) => {
+        save.inventory.push({
+          id: "p_" + baseId + "_" + i + "_" + Math.random().toString(36).slice(2, 9),
+          emoji: p.emoji,
+          name: p.name,
+          rankId: p.rankId,
+          rankLabel: p.rankLabel,
+          mutationStage: 0,
+          feedCount: 0,
+        });
+      });
+    }
     saveState();
 
     const title = document.getElementById("result-title");
     const body = document.getElementById("result-body");
     if (won) {
-      title.textContent = "脱出成功！";
+      title.textContent = isTutorial ? "練習クリア！" : "脱出成功！";
       title.style.color = "var(--ok)";
-      body.innerHTML = `<strong>${currentStage.name}</strong> をクリア。<br>救出: <strong>${rescued.length}</strong> 匹<br>獲得コイン: <strong>${coinsEarned}</strong><br>${rescued.map((p) => p.emoji + " " + p.name).join(" · ") || "（なし）"}`;
+      const tutNote = isTutorial
+        ? "<br><span style=\"color:var(--muted);font-size:0.9rem;\">練習ステージのため、ペットは拠点に追加されずコインも控えめです。本番ステージで救出しましょう。</span>"
+        : "";
+      const invLine = isTutorial
+        ? `救出した練習: <strong>${rescued.length}</strong> 匹（拠点には入りません）`
+        : `救出: <strong>${rescued.length}</strong> 匹 → 拠点に追加`;
+      body.innerHTML = `<strong>${currentStage.name}</strong> をクリア。<br>${invLine}<br>獲得コイン: <strong>${coinsEarned}</strong>${tutNote}<br>${rescued.map((p) => `${p.emoji} ${p.name}（${p.rankLabel}）`).join(" · ") || "（なし）"}`;
     } else {
-      title.textContent = reason === "time" ? "時間切れ…" : "救出失敗…";
+      const riskFail = reason === "risk";
+      title.textContent = reason === "time" ? "時間切れ…" : riskFail ? "建物崩壊…" : "救出失敗…";
       title.style.color = "var(--danger)";
-      body.innerHTML = `ビルに飲み込まれました。<br>それでも助けた子: <strong>${rescued.length}</strong> 匹<br>慰謝コイン: <strong>${coinsEarned}</strong>`;
+      const extra = riskFail ? "リスクが100%に達し、現場が完全に崩壊しました。" : "災害に飲み込まれました。";
+      body.innerHTML = `${extra}<br>このミッションで助けた子: <strong>${rescued.length}</strong> 匹（拠点には連れ帰れず）<br>慰謝コイン: <strong>${coinsEarned}</strong>`;
     }
     showScreen("screen-result");
   }
@@ -808,13 +1833,22 @@
     lastTs = ts;
     update(dt);
     const lose = stepSimulation(dt);
-    draw();
-    if (lose === "lose_hazard" || lose === "lose_time") {
-      endGame(false, lose === "lose_time" ? "time" : "hazard");
+    renderFrame();
+    if (lose === "lose_hazard" || lose === "lose_time" || lose === "lose_risk") {
+      endGame(false, lose === "lose_time" ? "time" : lose === "lose_risk" ? "risk" : "hazard");
       return;
     }
     requestAnimationFrame(loop);
   }
+
+  document.getElementById("cam-ccw").addEventListener("click", () => {
+    if (gameState !== "play") return;
+    camOrbitYaw += 0.28;
+  });
+  document.getElementById("cam-cw").addEventListener("click", () => {
+    if (gameState !== "play") return;
+    camOrbitYaw -= 0.28;
+  });
 
   document.getElementById("btn-escape").addEventListener("click", () => {
     if (gameState !== "play") return;
@@ -829,6 +1863,17 @@
     document.getElementById("btn-slow").style.display = "none";
   });
 
+  document.getElementById("to-base").addEventListener("click", () => {
+    refreshBaseUI();
+    showScreen("screen-base");
+  });
+  document.getElementById("from-base-title").addEventListener("click", () => {
+    showScreen("screen-title");
+  });
+  document.getElementById("from-base-shop").addEventListener("click", () => {
+    refreshShopUI();
+    showScreen("screen-shop");
+  });
   document.getElementById("to-stages").addEventListener("click", () => {
     showScreen("screen-stages");
   });
@@ -858,19 +1903,12 @@
   document.getElementById("pad-left").addEventListener("click", () => moveStep(-1));
   document.getElementById("pad-right").addEventListener("click", () => moveStep(1));
   document.getElementById("pad-up").addEventListener("click", () => tryClimb());
-
-  canvas.addEventListener("click", (e) => {
-    if (gameState !== "play") return;
-    const rect = canvas.getBoundingClientRect();
-    const nx = (e.clientX - rect.left) / rect.width;
-    if (nx < 0.35) moveStep(-1);
-    else if (nx > 0.65) moveStep(1);
-    else tryClimb();
-  });
+  document.getElementById("pad-near").addEventListener("click", () => moveStepZ(true));
+  document.getElementById("pad-far").addEventListener("click", () => moveStepZ(false));
 
   window.addEventListener("keydown", (e) => {
     keys[e.key] = true;
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "w" || e.key === "W" || e.key === "s" || e.key === "S") e.preventDefault();
   });
   window.addEventListener("keyup", (e) => { keys[e.key] = false; });
 

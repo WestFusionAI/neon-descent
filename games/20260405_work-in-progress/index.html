@@ -1797,8 +1797,8 @@
     }
     document.getElementById("hud-stage").textContent = stage.name;
     document.getElementById("play-hint").textContent = stage.tutorial
-      ? "【練習】←→／A・D、W・S または手前・奥。奥行きが分かりにくいときは HUD「視点·横」またはキー2。右奥の階段で ↑。PCは 1=斜め 2=横 3=上から。断面モニタも併用。"
-      : "奥行きは「視点·横」またはキー2がおすすめ。1=斜め 3=上から。右下断面モニタで高さ確認。鍵→上の階。◀↑▶／キー。脱出で拠点へ。";
+      ? "【練習】矢印キー（または WASD）で移動。階段の上では ↑ が上階へ。奥行きが分かりにくいときは HUD「視点·横」またはキー2。PCは 1=斜め 2=横 3=上から。断面モニタも併用。"
+      : "奥行きは「視点·横」またはキー2がおすすめ。1=斜め 3=上から。右下断面モニタで高さ確認。鍵→上の階。矢印または ◀▶／手前・奥。階段で ↑。脱出で拠点へ。";
     document.getElementById("btn-slow").style.display = save.hasSlowMachine ? "inline-block" : "none";
     const hk = document.getElementById("hud-key");
     if (stage.requiresKey) {
@@ -1882,30 +1882,38 @@
     if (movedDir !== 0) afterHorizontalMove(movedDir);
 
     const zStep = 0.08 * sm * (dt * 60);
-    if (keys["w"] || keys["W"]) {
-      player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z + zStep));
-      clampBlockedStairs();
-      tryRescueNearby();
-      tryPickupKey();
-    }
-    if (keys["s"] || keys["S"]) {
-      player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z - zStep));
-      clampBlockedStairs();
-      tryRescueNearby();
-      tryPickupKey();
-    }
 
     if (keys["q"] || keys["Q"]) camOrbitYaw += 2.15 * dt;
     if (keys["e"] || keys["E"]) camOrbitYaw -= 2.15 * dt;
 
     climbCooldown = Math.max(0, climbCooldown - dt);
-    if (keys["ArrowUp"] && climbCooldown <= 0 && inStairZone() && canAscendFromCurrentFloor() && player.floor < FLOORS - 1) {
+    const climbWithArrowUp =
+      keys["ArrowUp"] &&
+      climbCooldown <= 0 &&
+      inStairZone() &&
+      canAscendFromCurrentFloor() &&
+      player.floor < FLOORS - 1;
+
+    if (climbWithArrowUp) {
       player.floor += 1;
       player.x = 0.22;
       player.z = 0.5;
       climbCooldown = 0.32;
       tryRescueNearby();
       tryPickupKey();
+    } else {
+      if (keys["w"] || keys["W"] || keys["ArrowUp"]) {
+        player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z + zStep));
+        clampBlockedStairs();
+        tryRescueNearby();
+        tryPickupKey();
+      }
+      if (keys["s"] || keys["S"] || keys["ArrowDown"]) {
+        player.z = Math.max(MARGIN_Z, Math.min(1 - MARGIN_Z, player.z - zStep));
+        clampBlockedStairs();
+        tryRescueNearby();
+        tryPickupKey();
+      }
     }
 
     const slowMul = performance.now() < slowBuffUntil ? 0.52 : 1;
@@ -2077,7 +2085,18 @@
       if (e.key === "2") applyCameraPreset("side");
       if (e.key === "3") applyCameraPreset("top");
     }
-    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "w" || e.key === "W" || e.key === "s" || e.key === "S") e.preventDefault();
+    if (
+      gameState === "play" &&
+      (e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "w" ||
+        e.key === "W" ||
+        e.key === "s" ||
+        e.key === "S")
+    )
+      e.preventDefault();
   });
   window.addEventListener("keyup", (e) => { keys[e.key] = false; });
 

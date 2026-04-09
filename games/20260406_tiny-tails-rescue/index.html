@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#fdf6e3" />
+  <title>Tiny Tails Rescue</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <style>
+    :root {
+      --bg: #fdf6e3;
+      --panel: #fff8ee;
+      --card: #ffffff;
+      --text: #3a2f1c;
+      --muted: rgba(58,47,28,0.55);
+      --accent: #ff8844;
+      --accent2: #44aadd;
+      --ok: #44bb66;
+      --warn: #ffaa22;
+      --danger: #ee4455;
+      --rare-common: #aaaaaa;
+      --rare-uncommon: #55cc55;
+      --rare-rare: #5588ff;
+      --rare-epic: #cc55ff;
+      --radius: 14px;
+      --shadow: 0 4px 18px rgba(58,47,28,0.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; min-height: 100dvh; overflow: hidden;
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      touch-action: none; user-select: none;
+    }
+    #app { position: fixed; inset: 0; min-height: 100dvh; display: flex; flex-direction: column; }
+    #canvas-wrap { flex: 1; position: relative; min-height: 0; }
+    #game-view { display: block; width: 100%; height: 100%; position: relative; background: #88ccff; }
+    #game-view canvas { display: block; width: 100% !important; height: 100% !important; }
+
+    /* ── Screens ── */
+    .screen {
+      position: absolute; inset: 0; overflow-y: auto;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 10;
+    }
+    .screen.hidden { display: none; }
+    .screen-title {
+      background: linear-gradient(165deg, #88ddff 0%, #ffeebb 50%, #ffccaa 100%);
+    }
+    .screen-overlay {
+      background: rgba(253,246,227,0.92);
+      backdrop-filter: blur(8px);
+      justify-content: flex-start; padding-top: 24px;
+    }
+
+    /* ── Title ── */
+    .title-logo {
+      font-size: clamp(32px, 8vw, 64px); font-weight: 900;
+      color: #ff7733; text-shadow: 0 3px 0 #cc5500, 0 6px 20px rgba(255,119,51,0.3);
+      letter-spacing: -0.02em; margin-bottom: 8px;
+    }
+    .title-sub {
+      font-size: clamp(14px, 3vw, 20px); color: var(--muted);
+      margin-bottom: 32px; text-align: center;
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 14px 36px; border: none; border-radius: var(--radius);
+      font-family: inherit; font-size: 16px; font-weight: 700;
+      cursor: pointer; transition: transform 0.12s, box-shadow 0.12s;
+      box-shadow: var(--shadow);
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { box-shadow: 0 6px 24px rgba(255,136,68,0.35); }
+    .btn-secondary { background: var(--card); color: var(--text); border: 2px solid #e8dcc8; }
+    .btn-ok { background: var(--ok); color: #fff; }
+    .btn-accent2 { background: var(--accent2); color: #fff; }
+    .btn-sm { padding: 8px 18px; font-size: 13px; border-radius: 10px; }
+    .btn-disabled { opacity: 0.45; pointer-events: none; }
+
+    /* ── HUD ── */
+    #hud {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: max(8px, env(safe-area-inset-top)) 12px 0;
+      z-index: 5; pointer-events: none;
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    #hud.hidden { display: none; }
+    .hud-group {
+      display: flex; flex-direction: column; gap: 4px;
+      background: rgba(255,248,238,0.88); border-radius: 10px;
+      padding: 8px 12px; pointer-events: auto;
+      box-shadow: 0 2px 10px rgba(58,47,28,0.1);
+    }
+    .hud-line { font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .hud-coins { color: #cc8800; }
+    .hud-rescued { color: var(--ok); }
+
+    /* ── Interaction Prompt ── */
+    #interact-prompt {
+      position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+      z-index: 6; padding: 10px 24px; border-radius: 12px;
+      background: rgba(255,248,238,0.92); box-shadow: var(--shadow);
+      font-size: 15px; font-weight: 700; text-align: center;
+      pointer-events: none; transition: opacity 0.2s;
+    }
+    #interact-prompt.hidden { opacity: 0; pointer-events: none; }
+
+    /* ── Rescue Progress ── */
+    #rescue-bar-wrap {
+      position: absolute; bottom: 140px; left: 50%; transform: translateX(-50%);
+      width: min(280px, 70vw); z-index: 7;
+      transition: opacity 0.15s;
+    }
+    #rescue-bar-wrap.hidden { opacity: 0; pointer-events: none; }
+    .rescue-label { font-size: 13px; font-weight: 700; text-align: center; margin-bottom: 4px; color: var(--text); }
+    .rescue-track {
+      height: 18px; border-radius: 9px;
+      background: rgba(58,47,28,0.15); overflow: hidden;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .rescue-fill {
+      height: 100%; border-radius: 9px; width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--ok));
+      transition: width 0.05s linear;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+      z-index: 20; padding: 10px 24px; border-radius: 12px;
+      background: rgba(68,187,102,0.95); color: #fff;
+      font-size: 14px; font-weight: 700; text-align: center;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Fade Overlay ── */
+    #fade-overlay {
+      position: absolute; inset: 0; z-index: 30;
+      background: #fdf6e3; opacity: 0;
+      transition: opacity 0.25s ease; pointer-events: none;
+    }
+
+    /* ── Inventory / Shop / Result ── */
+    .overlay-title {
+      font-size: 24px; font-weight: 900; margin-bottom: 16px; text-align: center;
+    }
+    .close-row { width: 100%; max-width: 480px; display: flex; justify-content: flex-end; margin-bottom: 8px; }
+    .pet-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px; width: 100%; max-width: 600px;
+    }
+    .pet-card {
+      background: var(--card); border-radius: var(--radius); padding: 12px;
+      box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .pet-card .pet-icon { font-size: 36px; }
+    .pet-card .pet-name { font-size: 14px; font-weight: 700; }
+    .rarity-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 8px;
+      font-size: 11px; font-weight: 700; color: #fff;
+    }
+    .shop-list { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
+    .shop-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+    .shop-info { display: flex; flex-direction: column; gap: 2px; }
+    .shop-name { font-size: 15px; font-weight: 700; }
+    .shop-desc { font-size: 12px; color: var(--muted); }
+    .result-pets { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+    .result-row {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--card); border-radius: var(--radius); padding: 12px 16px;
+      box-shadow: var(--shadow); width: 100%;
+    }
+    .result-icon { font-size: 28px; }
+    .result-info { flex: 1; }
+    .result-coins { font-weight: 700; color: #cc8800; }
+
+    /* ── Mobile Controls ── */
+    #mobile-controls {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 140px; z-index: 4; pointer-events: none;
+    }
+    #mobile-controls.hidden { display: none; }
+    #joystick-area {
+      position: absolute; left: 16px; bottom: 24px;
+      width: 110px; height: 110px; border-radius: 50%;
+      background: rgba(58,47,28,0.12); border: 2px solid rgba(58,47,28,0.2);
+      pointer-events: auto;
+    }
+    #joystick-knob {
+      position: absolute; left: 50%; top: 50%;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(255,136,68,0.6); border: 2px solid rgba(255,136,68,0.8);
+      transform: translate(-50%, -50%); pointer-events: none;
+    }
+    #btn-rescue-mobile {
+      position: absolute; right: 20px; bottom: 30px;
+      width: 80px; height: 80px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      font-size: 13px; font-weight: 900; border: 3px solid #fff;
+      box-shadow: 0 4px 16px rgba(255,136,68,0.4);
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: auto; cursor: pointer;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    #btn-rescue-mobile.show { opacity: 1; }
+
+    /* ── Misc ── */
+    .rank-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 8px;
+      background: var(--accent); color: #fff;
+      font-size: 12px; font-weight: 700;
+    }
+    .empty-msg { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 0; }
+    @media (min-width: 481px) {
+      #mobile-controls { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="canvas-wrap">
+    <div id="game-view"></div>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-group">
+        <span class="hud-line hud-coins" id="hud-coins">0</span>
+        <span class="hud-line hud-rescued" id="hud-rescued">0</span>
+        <span class="hud-line" id="hud-rank">Rank 1</span>
+      </div>
+      <div class="hud-group">
+        <span class="hud-line" id="hud-world">Hub</span>
+        <button class="btn btn-sm btn-secondary" id="btn-back-hub" style="display:none">Hub</button>
+      </div>
+    </div>
+
+    <!-- Interaction Prompt -->
+    <div id="interact-prompt" class="hidden"></div>
+
+    <!-- Rescue Progress Bar -->
+    <div id="rescue-bar-wrap" class="hidden">
+      <div class="rescue-label" id="rescue-label"></div>
+      <div class="rescue-track"><div class="rescue-fill" id="rescue-fill"></div></div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <!-- Fade -->
+    <div id="fade-overlay"></div>
+
+    <!-- Mobile -->
+    <div id="mobile-controls" class="hidden">
+      <div id="joystick-area"><div id="joystick-knob"></div></div>
+      <div id="btn-rescue-mobile">RESCUE</div>
+    </div>
+
+    <!-- ── Title Screen ── -->
+    <div class="screen screen-title" id="screen-title">
+      <div class="title-logo">Tiny Tails Rescue</div>
+      <div class="title-sub">かわいい動物を見つけて助けよう！</div>
+      <button class="btn btn-primary" id="btn-start">はじめる</button>
+    </div>
+
+    <!-- ── Inventory Screen ── -->
+    <div class="screen screen-overlay hidden" id="screen-inventory">
+      <div class="close-row"><button class="btn btn-sm btn-secondary" id="btn-inv-close">とじる</button></div>
+      <div class="overlay-title">ペット図鑑</div>
+      <div id="inv-equipped" style="margin-bottom:12px;font-size:14px;font-weight:700;"></div>
+      <div class="pet-grid" id="inv-grid"></div>
+    </div>
+
+    <!-- ── Shop Screen ── -->
+    <div class="screen screen-overlay hidden" id="screen-shop">
+      <div class="close-row"><button class="btn btn-sm btn-secondary" id="btn-shop-close">とじる</button></div>
+      <div class="overlay-title">ショップ</div>
+      <div id="shop-coins" style="font-size:15px;font-weight:700;color:#cc8800;margin-bottom:12px;"></div>
+      <div class="shop-list" id="shop-list"></div>
+    </div>
+
+    <!-- ── Result Screen ── -->
+    <div class="screen screen-overlay hidden" id="screen-result">
+      <div class="overlay-title" id="result-title">レスキュー完了！</div>
+      <div class="result-pets" id="result-pets"></div>
+      <div id="result-summary" style="margin:16px 0;font-size:15px;font-weight:700;text-align:center;"></div>
+      <button class="btn btn-primary" id="btn-result-ok">拠点へ戻る</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const T = THREE;
+
+  /* ================================================================
+     1. CONSTANTS & DATA
+     ================================================================ */
+  const RARITY = {
+    common:   { label: "コモン",   color: 0xaaaaaa, css: "#aaa",    mult: 1.0 },
+    uncommon: { label: "アンコモン", color: 0x55cc55, css: "#5c5",   mult: 1.5 },
+    rare:     { label: "レア",     color: 0x5588ff, css: "#58f",    mult: 2.5 },
+    epic:     { label: "エピック",  color: 0xcc55ff, css: "#c5f",    mult: 4.0 },
+  };
+  const RARITY_KEYS = ["common", "uncommon", "rare", "epic"];
+
+  const PET_DEFS = {
+    puppy:    { nameJa: "子犬",       emoji: "\u{1F436}", world: "grassland", baseTime: 3.0, baseCoins: 15, weights: [55, 28, 13, 4] },
+    bunny:    { nameJa: "うさぎ",     emoji: "\u{1F430}", world: "grassland", baseTime: 2.5, baseCoins: 12, weights: [60, 25, 11, 4] },
+    piglet:   { nameJa: "子ぶた",     emoji: "\u{1F437}", world: "grassland", baseTime: 3.5, baseCoins: 18, weights: [50, 30, 14, 6] },
+    kitten:   { nameJa: "子猫",       emoji: "\u{1F431}", world: "grassland", baseTime: 2.8, baseCoins: 14, weights: [58, 26, 12, 4] },
+    duckling: { nameJa: "アヒルの子", emoji: "\u{1F425}", world: "lakefront", baseTime: 2.5, baseCoins: 20, weights: [52, 28, 14, 6] },
+    beaver:   { nameJa: "ビーバー",   emoji: "\u{1F9AB}", world: "lakefront", baseTime: 4.0, baseCoins: 25, weights: [48, 28, 16, 8] },
+    otter:    { nameJa: "カワウソ",   emoji: "\u{1F9A6}", world: "lakefront", baseTime: 3.0, baseCoins: 22, weights: [50, 28, 15, 7] },
+    turtle:   { nameJa: "カメ",       emoji: "\u{1F422}", world: "lakefront", baseTime: 4.5, baseCoins: 28, weights: [45, 28, 18, 9] },
+  };
+
+  /* Rescue node templates per world */
+  const NODE_TEMPLATES = {
+    grassland: [
+      { type: "bush",  pos: [10, 0, 8],   pets: ["puppy", "bunny"] },
+      { type: "cage",  pos: [-8, 0, 12],  pets: ["kitten", "bunny"] },
+      { type: "rock",  pos: [15, 0, -5],  pets: ["piglet", "puppy"] },
+      { type: "bush",  pos: [-14, 0, -10], pets: ["bunny", "kitten"] },
+      { type: "cage",  pos: [5, 0, -18],  pets: ["puppy", "piglet"] },
+      { type: "bush",  pos: [-6, 0, 20],  pets: ["kitten", "piglet"] },
+      { type: "rock",  pos: [20, 0, 15],  pets: ["bunny", "puppy"] },
+      { type: "bush",  pos: [-18, 0, 5],  pets: ["piglet", "kitten"] },
+      { type: "cage",  pos: [12, 0, -22], pets: ["puppy", "bunny"] },
+      { type: "rock",  pos: [-20, 0, -18], pets: ["kitten", "piglet"] },
+    ],
+    lakefront: [
+      { type: "bush",  pos: [8, 0, 14],   pets: ["duckling", "otter"] },
+      { type: "cage",  pos: [-12, 0, 8],  pets: ["beaver", "turtle"] },
+      { type: "rock",  pos: [18, 0, -8],  pets: ["otter", "duckling"] },
+      { type: "bush",  pos: [-8, 0, -16], pets: ["turtle", "beaver"] },
+      { type: "cage",  pos: [14, 0, 20],  pets: ["duckling", "beaver"] },
+      { type: "bush",  pos: [-18, 0, -6], pets: ["otter", "turtle"] },
+      { type: "rock",  pos: [6, 0, -22],  pets: ["beaver", "duckling"] },
+      { type: "bush",  pos: [-14, 0, 18], pets: ["turtle", "otter"] },
+      { type: "cage",  pos: [22, 0, 4],   pets: ["duckling", "otter"] },
+      { type: "rock",  pos: [-22, 0, -20], pets: ["beaver", "turtle"] },
+    ],
+  };
+
+  const ENEMY_DEFS = {
+    grassland: [
+      { kind: "bee",   nameJa: "ハチ",   speed: 3.0, radius: 7,  home: [12, 0, 0] },
+      { kind: "crow",  nameJa: "カラス", speed: 3.5, radius: 9,  home: [-10, 0, -14] },
+      { kind: "fox",   nameJa: "キツネ", speed: 2.5, radius: 6,  home: [0, 0, 18] },
+    ],
+    lakefront: [
+      { kind: "crab",  nameJa: "カニ",   speed: 2.5, radius: 6,  home: [14, 0, 10] },
+      { kind: "goose", nameJa: "ガチョウ", speed: 3.5, radius: 8, home: [-10, 0, 0] },
+      { kind: "fish",  nameJa: "魚",     speed: 2.0, radius: 5,  home: [0, 0, -16] },
+    ],
+  };
+
+  const SHOP_ITEMS = [
+    { id: "speed",     nameJa: "移動速度アップ",       descJa: "走る速さ+15%",       field: "walkSpeedLevel", max: 5, cost: l => 50 + l * 40 },
+    { id: "tool",      nameJa: "レスキューツール強化",  descJa: "救助時間-0.3秒",      field: "toolLevel",      max: 5, cost: l => 60 + l * 50 },
+    { id: "capacity",  nameJa: "インベントリ拡張",     descJa: "持てるペット+3",      field: "inventoryCapacity", max: 24, cost: l => 80 + Math.floor((l - 6) / 3) * 30, step: 3 },
+    { id: "lakefront", nameJa: "湖畔エリア解放",       descJa: "新しい世界を開く！",   field: null, max: 1, cost: () => 200, oneTime: true },
+  ];
+
+  const WORLD_BOUNDS = { hub: 19, grassland: 28, lakefront: 28 };
+  const RESPAWN_SEC = 28;
+  const RESCUE_DIST = 2.5;
+  const KNOCKBACK_DUR = 0.4;
+  const ENEMY_HIT_DIST = 1.8;
+  const PORTAL_DIST = 2.5;
+  const HUB_INTERACT_DIST = 3.5;
+
+  /* ================================================================
+     2. SAVE / LOAD
+     ================================================================ */
+  const SAVE_KEY = "tiny_tails_rescue_v1";
+  function defaultSave() {
+    return {
+      coins: 0, rescueRank: 1, rescueXP: 0,
+      unlockedWorlds: ["hub", "grassland"],
+      ownedPets: [], equippedPetId: null,
+      walkSpeedLevel: 0, toolLevel: 0,
+      inventoryCapacity: 6, totalRescued: 0,
+    };
+  }
+  let save = defaultSave();
+  function loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) { save = defaultSave(); return; }
+      const d = JSON.parse(raw);
+      const def = defaultSave();
+      for (const k of Object.keys(def)) {
+        if (d[k] === undefined || typeof d[k] !== typeof def[k]) d[k] = def[k];
+      }
+      save = d;
+    } catch { save = defaultSave(); }
+  }
+  function saveSave() { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+  loadSave();
+
+  /* ================================================================
+     3. THREE.JS SETUP
+     ================================================================ */
+  let scene, camera, renderer;
+  const el = {
+    gameView: document.getElementById("game-view"),
+    hud: document.getElementById("hud"),
+    hudCoins: document.getElementById("hud-coins"),
+    hudRescued: document.getElementById("hud-rescued"),
+    hudRank: document.getElementById("hud-rank"),
+    hudWorld: document.getElementById("hud-world"),
+    btnBackHub: document.getElementById("btn-back-hub"),
+    prompt: document.getElementById("interact-prompt"),
+    rescueWrap: document.getElementById("rescue-bar-wrap"),
+    rescueLabel: document.getElementById("rescue-label"),
+    rescueFill: document.getElementById("rescue-fill"),
+    toast: document.getElementById("toast"),
+    fade: document.getElementById("fade-overlay"),
+    mobileCtrl: document.getElementById("mobile-controls"),
+    joystickArea: document.getElementById("joystick-area"),
+    joystickKnob: document.getElementById("joystick-knob"),
+    btnRescueMobile: document.getElementById("btn-rescue-mobile"),
+    invGrid: document.getElementById("inv-grid"),
+    invEquipped: document.getElementById("inv-equipped"),
+    shopCoins: document.getElementById("shop-coins"),
+    shopList: document.getElementById("shop-list"),
+    resultTitle: document.getElementById("result-title"),
+    resultPets: document.getElementById("result-pets"),
+    resultSummary: document.getElementById("result-summary"),
+  };
+
+  function initRenderer() {
+    scene = new T.Scene();
+    camera = new T.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 120);
+    renderer = new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(el.gameView.clientWidth, el.gameView.clientHeight);
+    renderer.setClearColor(0x88ccff);
+    el.gameView.appendChild(renderer.domElement);
+    window.addEventListener("resize", onResize);
+  }
+  function onResize() {
+    const w = el.gameView.clientWidth, h = el.gameView.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+
+  function clearScene() {
+    while (scene.children.length > 0) {
+      const c = scene.children[0];
+      scene.remove(c);
+      if (c.traverse) c.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+          else o.material.dispose();
+        }
+      });
+    }
+  }
+
+  /* ================================================================
+     4. MODEL BUILDERS
+     ================================================================ */
+  function addSh(m) { m.castShadow = true; return m; }
+  function furMat(c, r) { return new T.MeshStandardMaterial({ color: c, roughness: r || 0.78 }); }
+  function eyeMat() { return new T.MeshStandardMaterial({ color: 0x111111, roughness: 0.3 }); }
+  function whiteMat() { return new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }); }
+
+  /* ── Player: Rescue Worker ── */
+  function makePlayer() {
+    const g = new T.Group();
+    // Body
+    const body = addSh(new T.Mesh(new T.CapsuleGeometry(0.35, 0.5, 8, 12), furMat(0xff8844)));
+    body.position.y = 0.9;
+    g.add(body);
+    // Head
+    const head = addSh(new T.Mesh(new T.SphereGeometry(0.28, 12, 10), furMat(0xffddaa, 0.6)));
+    head.position.y = 1.55;
+    g.add(head);
+    // Helmet
+    const helmet = addSh(new T.Mesh(new T.SphereGeometry(0.32, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), furMat(0xffee44, 0.4)));
+    helmet.position.y = 1.62;
+    g.add(helmet);
+    // Brim
+    const brim = addSh(new T.Mesh(new T.CylinderGeometry(0.36, 0.36, 0.04, 12), furMat(0xddcc22, 0.5)));
+    brim.position.y = 1.52;
+    g.add(brim);
+    // Eyes
+    for (const sx of [-1, 1]) {
+      const eye = new T.Mesh(new T.SphereGeometry(0.05, 8, 6), eyeMat());
+      eye.position.set(sx * 0.12, 1.57, 0.22);
+      g.add(eye);
+    }
+    // Vest
+    const vest = addSh(new T.Mesh(new T.BoxGeometry(0.6, 0.35, 0.38), furMat(0xff6622)));
+    vest.position.y = 1.05;
+    g.add(vest);
+    // Badge
+    const badge = addSh(new T.Mesh(new T.BoxGeometry(0.08, 0.08, 0.02), furMat(0xffdd00)));
+    badge.position.set(0.2, 1.12, 0.2);
+    g.add(badge);
+    // Arms
+    for (const sx of [-1, 1]) {
+      const arm = addSh(new T.Mesh(new T.CapsuleGeometry(0.1, 0.35, 6, 8), furMat(0xff8844)));
+      arm.position.set(sx * 0.42, 0.9, 0);
+      g.add(arm);
+      // Gloves
+      const glv = addSh(new T.Mesh(new T.SphereGeometry(0.1, 8, 6), furMat(0x444444)));
+      glv.position.set(sx * 0.42, 0.58, 0);
+      g.add(glv);
+    }
+    // Legs
+    for (const sx of [-1, 1]) {
+      const leg = addSh(new T.Mesh(new T.CapsuleGeometry(0.1, 0.3, 6, 8), furMat(0x334466)));
+      leg.position.set(sx * 0.15, 0.3, 0);
+      g.add(leg);
+      const boot = addSh(new T.Mesh(new T.BoxGeometry(0.16, 0.12, 0.22), furMat(0x222222)));
+      boot.position.set(sx * 0.15, 0.06, 0.02);
+      g.add(boot);
+    }
+    // Backpack
+    const pack = addSh(new T.Mesh(new T.BoxGeometry(0.3, 0.35, 0.18), furMat(0x44aa66)));
+    pack.position.set(0, 1.0, -0.24);
+    g.add(pack);
+    g.scale.setScalar(0.9);
+    return g;
+  }
+
+  /* ── Animals ── */
+  function makeAnimal(species) {
+    const g = new T.Group();
+    switch (species) {
+      case "puppy": {
+        const b = addSh(new T.Mesh(new T.CapsuleGeometry(0.28, 0.3, 8, 10), furMat(0xcc8844)));
+        b.position.y = 0.4; b.rotation.x = Math.PI / 2 * 0.15;
+        g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.25, 10, 8), furMat(0xcc8844)));
+        h.position.set(0, 0.55, 0.22);
+        g.add(h);
+        for (const sx of [-1, 1]) {
+          const ear = addSh(new T.Mesh(new T.BoxGeometry(0.1, 0.18, 0.04), furMat(0x996633)));
+          ear.position.set(sx * 0.18, 0.7, 0.18); ear.rotation.z = sx * 0.3;
+          g.add(ear);
+          const eye = new T.Mesh(new T.SphereGeometry(0.045, 8, 6), eyeMat());
+          eye.position.set(sx * 0.1, 0.58, 0.4);
+          g.add(eye);
+        }
+        const nose = new T.Mesh(new T.SphereGeometry(0.04, 6, 4), eyeMat());
+        nose.position.set(0, 0.5, 0.46); g.add(nose);
+        const tail = addSh(new T.Mesh(new T.CylinderGeometry(0.03, 0.02, 0.2, 6), furMat(0xcc8844)));
+        tail.position.set(0, 0.55, -0.28); tail.rotation.x = -0.8;
+        g.add(tail);
+        for (const sx of [-1, 1]) for (const sz of [1, -1]) {
+          const leg = addSh(new T.Mesh(new T.CylinderGeometry(0.05, 0.04, 0.2, 6), furMat(0xcc8844)));
+          leg.position.set(sx * 0.14, 0.1, sz * 0.14);
+          g.add(leg);
+        }
+        break;
+      }
+      case "bunny": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.25, 10, 8), furMat(0xf5f0e8)));
+        b.position.y = 0.35; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.22, 10, 8), furMat(0xf5f0e8)));
+        h.position.set(0, 0.6, 0.1); g.add(h);
+        for (const sx of [-1, 1]) {
+          const ear = addSh(new T.Mesh(new T.CapsuleGeometry(0.05, 0.3, 6, 8), furMat(0xf5f0e8)));
+          ear.position.set(sx * 0.1, 0.92, 0.05); ear.rotation.z = sx * 0.15;
+          g.add(ear);
+          const ei = new T.Mesh(new T.CapsuleGeometry(0.025, 0.22, 4, 6), furMat(0xffaaaa));
+          ei.position.set(sx * 0.1, 0.92, 0.07); ei.rotation.z = sx * 0.15;
+          g.add(ei);
+          const eye = new T.Mesh(new T.SphereGeometry(0.04, 8, 6), new T.MeshStandardMaterial({ color: 0xcc3355, roughness: 0.3 }));
+          eye.position.set(sx * 0.1, 0.63, 0.28); g.add(eye);
+        }
+        const nose = new T.Mesh(new T.SphereGeometry(0.025, 6, 4), furMat(0xffaaaa));
+        nose.position.set(0, 0.55, 0.32); g.add(nose);
+        const puff = addSh(new T.Mesh(new T.SphereGeometry(0.08, 8, 6), furMat(0xffffff)));
+        puff.position.set(0, 0.35, -0.25); g.add(puff);
+        break;
+      }
+      case "piglet": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.3, 10, 8), furMat(0xffaaaa)));
+        b.position.y = 0.35; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.24, 10, 8), furMat(0xffaaaa)));
+        h.position.set(0, 0.6, 0.15); g.add(h);
+        const snout = addSh(new T.Mesh(new T.CylinderGeometry(0.1, 0.1, 0.08, 8), furMat(0xff8888)));
+        snout.position.set(0, 0.52, 0.38); snout.rotation.x = Math.PI / 2;
+        g.add(snout);
+        for (const sx of [-1, 1]) {
+          const ear = addSh(new T.Mesh(new T.ConeGeometry(0.08, 0.12, 6), furMat(0xff9999)));
+          ear.position.set(sx * 0.15, 0.82, 0.1); ear.rotation.z = sx * 0.5;
+          g.add(ear);
+          const eye = new T.Mesh(new T.SphereGeometry(0.035, 8, 6), eyeMat());
+          eye.position.set(sx * 0.1, 0.63, 0.34); g.add(eye);
+          // Nostrils
+          const nos = new T.Mesh(new T.SphereGeometry(0.02, 4, 4), eyeMat());
+          nos.position.set(sx * 0.035, 0.52, 0.43); g.add(nos);
+        }
+        // Curly tail
+        const tail = addSh(new T.Mesh(new T.TorusGeometry(0.06, 0.02, 6, 8, Math.PI * 1.5), furMat(0xffaaaa)));
+        tail.position.set(0, 0.45, -0.3); tail.rotation.y = Math.PI;
+        g.add(tail);
+        for (const sx of [-1, 1]) for (const sz of [1, -1]) {
+          const leg = addSh(new T.Mesh(new T.CylinderGeometry(0.05, 0.04, 0.16, 6), furMat(0xffaaaa)));
+          leg.position.set(sx * 0.13, 0.08, sz * 0.12); g.add(leg);
+        }
+        break;
+      }
+      case "kitten": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.22, 10, 8), furMat(0x888888)));
+        b.position.y = 0.32; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.2, 10, 8), furMat(0x888888)));
+        h.position.set(0, 0.55, 0.1); g.add(h);
+        for (const sx of [-1, 1]) {
+          const ear = addSh(new T.Mesh(new T.ConeGeometry(0.06, 0.12, 4), furMat(0x888888)));
+          ear.position.set(sx * 0.12, 0.75, 0.08); g.add(ear);
+          const eye = new T.Mesh(new T.SphereGeometry(0.04, 8, 6), new T.MeshStandardMaterial({ color: 0x44cc66, roughness: 0.3 }));
+          eye.position.set(sx * 0.09, 0.58, 0.26); g.add(eye);
+          // Whiskers
+          for (let i = -1; i <= 1; i++) {
+            const w = new T.Mesh(new T.CylinderGeometry(0.004, 0.004, 0.18, 4), furMat(0xcccccc));
+            w.position.set(sx * 0.16, 0.5 + i * 0.03, 0.24);
+            w.rotation.z = Math.PI / 2 + sx * 0.2 + i * 0.1;
+            g.add(w);
+          }
+        }
+        const nose = new T.Mesh(new T.SphereGeometry(0.025, 6, 4), furMat(0xffaaaa));
+        nose.position.set(0, 0.52, 0.3); g.add(nose);
+        const tail = addSh(new T.Mesh(new T.CapsuleGeometry(0.03, 0.35, 6, 8), furMat(0x888888)));
+        tail.position.set(0, 0.35, -0.3); tail.rotation.x = -0.6; tail.rotation.z = 0.3;
+        g.add(tail);
+        break;
+      }
+      case "duckling": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.22, 10, 8), furMat(0xffee44)));
+        b.position.y = 0.28; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.17, 10, 8), furMat(0xffee44)));
+        h.position.set(0, 0.52, 0.08); g.add(h);
+        const beak = addSh(new T.Mesh(new T.ConeGeometry(0.06, 0.12, 6), furMat(0xff8800)));
+        beak.position.set(0, 0.46, 0.28); beak.rotation.x = Math.PI / 2;
+        g.add(beak);
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.03, 8, 6), eyeMat());
+          eye.position.set(sx * 0.08, 0.56, 0.2); g.add(eye);
+          const wing = addSh(new T.Mesh(new T.BoxGeometry(0.04, 0.15, 0.12), furMat(0xeedd33)));
+          wing.position.set(sx * 0.22, 0.28, -0.02); wing.rotation.z = sx * 0.3;
+          g.add(wing);
+        }
+        // Feet
+        for (const sx of [-1, 1]) {
+          const foot = addSh(new T.Mesh(new T.BoxGeometry(0.1, 0.02, 0.12), furMat(0xff8800)));
+          foot.position.set(sx * 0.08, 0.02, 0.04); g.add(foot);
+        }
+        break;
+      }
+      case "beaver": {
+        const b = addSh(new T.Mesh(new T.CapsuleGeometry(0.25, 0.25, 8, 10), furMat(0x885533)));
+        b.position.y = 0.38; b.rotation.x = 0.15; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.2, 10, 8), furMat(0x885533)));
+        h.position.set(0, 0.6, 0.18); g.add(h);
+        // Flat tail
+        const tail = addSh(new T.Mesh(new T.BoxGeometry(0.16, 0.04, 0.3), furMat(0x664422)));
+        tail.position.set(0, 0.2, -0.38); tail.rotation.x = 0.3;
+        g.add(tail);
+        // Teeth
+        for (const sx of [-0.5, 0.5]) {
+          const tooth = new T.Mesh(new T.BoxGeometry(0.04, 0.06, 0.02), whiteMat());
+          tooth.position.set(sx * 0.04, 0.48, 0.38); g.add(tooth);
+        }
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.035, 8, 6), eyeMat());
+          eye.position.set(sx * 0.09, 0.64, 0.34); g.add(eye);
+          const ear = addSh(new T.Mesh(new T.SphereGeometry(0.04, 6, 4), furMat(0x885533)));
+          ear.position.set(sx * 0.17, 0.72, 0.12); g.add(ear);
+        }
+        for (const sx of [-1, 1]) for (const sz of [1, -1]) {
+          const leg = addSh(new T.Mesh(new T.CylinderGeometry(0.05, 0.04, 0.18, 6), furMat(0x885533)));
+          leg.position.set(sx * 0.12, 0.09, sz * 0.12); g.add(leg);
+        }
+        break;
+      }
+      case "otter": {
+        const b = addSh(new T.Mesh(new T.CapsuleGeometry(0.2, 0.4, 8, 10), furMat(0x886644)));
+        b.position.y = 0.35; b.rotation.x = 0.1; g.add(b);
+        const belly = addSh(new T.Mesh(new T.CapsuleGeometry(0.15, 0.3, 8, 10), furMat(0xddcc99)));
+        belly.position.set(0, 0.34, 0.06); belly.rotation.x = 0.1; g.add(belly);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.18, 10, 8), furMat(0x886644)));
+        h.position.set(0, 0.6, 0.15); g.add(h);
+        const nose = new T.Mesh(new T.SphereGeometry(0.03, 6, 4), eyeMat());
+        nose.position.set(0, 0.55, 0.32); g.add(nose);
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.035, 8, 6), eyeMat());
+          eye.position.set(sx * 0.08, 0.63, 0.28); g.add(eye);
+          const ear = addSh(new T.Mesh(new T.SphereGeometry(0.04, 6, 4), furMat(0x886644)));
+          ear.position.set(sx * 0.15, 0.72, 0.08); g.add(ear);
+        }
+        const tail = addSh(new T.Mesh(new T.CapsuleGeometry(0.04, 0.35, 6, 8), furMat(0x886644)));
+        tail.position.set(0, 0.25, -0.4); tail.rotation.x = -0.4; g.add(tail);
+        break;
+      }
+      case "turtle": {
+        // Shell
+        const shell = addSh(new T.Mesh(new T.SphereGeometry(0.28, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), furMat(0x448844)));
+        shell.position.y = 0.22; g.add(shell);
+        // Belly
+        const bellyG = new T.CylinderGeometry(0.26, 0.26, 0.06, 10);
+        const bellyM = addSh(new T.Mesh(bellyG, furMat(0xaacc88)));
+        bellyM.position.y = 0.12; g.add(bellyM);
+        // Head
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.12, 8, 6), furMat(0x66aa55)));
+        h.position.set(0, 0.22, 0.3); g.add(h);
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.025, 6, 4), eyeMat());
+          eye.position.set(sx * 0.05, 0.27, 0.38); g.add(eye);
+        }
+        // Legs
+        for (const sx of [-1, 1]) for (const sz of [1, -1]) {
+          const leg = addSh(new T.Mesh(new T.BoxGeometry(0.08, 0.06, 0.1), furMat(0x66aa55)));
+          leg.position.set(sx * 0.2, 0.06, sz * 0.15); g.add(leg);
+        }
+        // Tail
+        const tail = addSh(new T.Mesh(new T.ConeGeometry(0.03, 0.1, 4), furMat(0x66aa55)));
+        tail.position.set(0, 0.15, -0.3); tail.rotation.x = Math.PI / 2;
+        g.add(tail);
+        break;
+      }
+    }
+    return g;
+  }
+
+  function applyRarity(group, rarity) {
+    if (rarity === "common") return;
+    const r = RARITY[rarity];
+    group.traverse(o => {
+      if (o.material && o.material.isMeshStandardMaterial) {
+        o.material = o.material.clone();
+        o.material.emissive = new T.Color(r.color);
+        o.material.emissiveIntensity = rarity === "uncommon" ? 0.2 : rarity === "rare" ? 0.35 : 0.5;
+      }
+    });
+    if (rarity === "epic") group.scale.multiplyScalar(1.15);
+    if (rarity === "rare" || rarity === "epic") {
+      for (let i = 0; i < 3; i++) {
+        const sp = new T.Mesh(new T.SphereGeometry(0.04, 6, 4), new T.MeshStandardMaterial({ color: r.color, emissive: r.color, emissiveIntensity: 0.8 }));
+        sp.position.set(Math.cos(i * 2.1) * 0.5, 0.6 + i * 0.15, Math.sin(i * 2.1) * 0.5);
+        sp.userData.sparkle = true;
+        sp.userData.sparklePhase = i * 2.1;
+        group.add(sp);
+      }
+    }
+  }
+
+  /* ── Rescue Nodes ── */
+  function makeNodeMesh(type) {
+    const g = new T.Group();
+    switch (type) {
+      case "bush": {
+        const colors = [0x44aa44, 0x55bb55, 0x3d9940];
+        for (let i = 0; i < 4; i++) {
+          const s = addSh(new T.Mesh(new T.SphereGeometry(0.35 + Math.random() * 0.2, 8, 6), furMat(colors[i % 3])));
+          s.position.set((Math.random() - 0.5) * 0.5, 0.25 + Math.random() * 0.15, (Math.random() - 0.5) * 0.5);
+          g.add(s);
+        }
+        break;
+      }
+      case "cage": {
+        const frame = furMat(0x888888, 0.4);
+        // Bars
+        for (let i = 0; i < 6; i++) {
+          const bar = addSh(new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 0.7, 4), frame));
+          bar.position.set(-0.25 + i * 0.1, 0.35, 0.25);
+          g.add(bar);
+          const bar2 = addSh(new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 0.7, 4), frame));
+          bar2.position.set(-0.25 + i * 0.1, 0.35, -0.25);
+          g.add(bar2);
+        }
+        // Top & bottom
+        const top = addSh(new T.Mesh(new T.BoxGeometry(0.6, 0.03, 0.55), frame));
+        top.position.y = 0.7; g.add(top);
+        const bot = addSh(new T.Mesh(new T.BoxGeometry(0.6, 0.03, 0.55), frame));
+        bot.position.y = 0.02; g.add(bot);
+        break;
+      }
+      case "rock": {
+        const r1 = addSh(new T.Mesh(new T.SphereGeometry(0.45, 7, 5), furMat(0x999988, 0.9)));
+        r1.position.y = 0.25; r1.scale.set(1, 0.65, 1); g.add(r1);
+        const r2 = addSh(new T.Mesh(new T.SphereGeometry(0.25, 6, 4), furMat(0x888877, 0.9)));
+        r2.position.set(0.25, 0.2, 0.15); r2.scale.set(1, 0.6, 1); g.add(r2);
+        // Crack
+        const cr = new T.Mesh(new T.BoxGeometry(0.02, 0.3, 0.02), furMat(0x444433));
+        cr.position.set(0.05, 0.3, 0.4); cr.rotation.z = 0.3; g.add(cr);
+        break;
+      }
+    }
+    return g;
+  }
+
+  /* ── Enemies ── */
+  function makeEnemyMesh(kind) {
+    const g = new T.Group();
+    switch (kind) {
+      case "bee": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.22, 8, 6), furMat(0xffdd00)));
+        b.position.y = 0.8; g.add(b);
+        for (let i = 0; i < 3; i++) {
+          const stripe = addSh(new T.Mesh(new T.CylinderGeometry(0.23, 0.23, 0.04, 8), furMat(0x222200)));
+          stripe.position.y = 0.72 + i * 0.08; g.add(stripe);
+        }
+        for (const sx of [-1, 1]) {
+          const wing = new T.Mesh(new T.BoxGeometry(0.03, 0.18, 0.12),
+            new T.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
+          wing.position.set(sx * 0.22, 0.95, 0); wing.rotation.z = sx * 0.5;
+          g.add(wing);
+          const eye = new T.Mesh(new T.SphereGeometry(0.04, 6, 4), eyeMat());
+          eye.position.set(sx * 0.1, 0.85, 0.18); g.add(eye);
+        }
+        const sting = new T.Mesh(new T.ConeGeometry(0.03, 0.1, 4), furMat(0x222200));
+        sting.position.set(0, 0.8, -0.25); sting.rotation.x = -Math.PI / 2; g.add(sting);
+        break;
+      }
+      case "crow": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.25, 8, 6), furMat(0x222222)));
+        b.position.y = 0.8; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.15, 8, 6), furMat(0x222222)));
+        h.position.set(0, 1.0, 0.12); g.add(h);
+        const beak = new T.Mesh(new T.ConeGeometry(0.04, 0.12, 4), furMat(0x444400));
+        beak.position.set(0, 0.95, 0.26); beak.rotation.x = Math.PI / 2; g.add(beak);
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.03, 6, 4), new T.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff0000, emissiveIntensity: 0.4, roughness: 0.3 }));
+          eye.position.set(sx * 0.08, 1.04, 0.22); g.add(eye);
+          const wing = addSh(new T.Mesh(new T.BoxGeometry(0.04, 0.12, 0.25), furMat(0x333333)));
+          wing.position.set(sx * 0.28, 0.82, -0.05); wing.rotation.z = sx * 0.4; g.add(wing);
+        }
+        break;
+      }
+      case "fox": {
+        const b = addSh(new T.Mesh(new T.CapsuleGeometry(0.2, 0.3, 8, 10), furMat(0xcc5500)));
+        b.position.y = 0.45; b.rotation.x = 0.1; g.add(b);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.18, 8, 6), furMat(0xcc5500)));
+        h.position.set(0, 0.65, 0.16); g.add(h);
+        const snout = addSh(new T.Mesh(new T.ConeGeometry(0.06, 0.15, 6), furMat(0xcc5500)));
+        snout.position.set(0, 0.58, 0.32); snout.rotation.x = Math.PI / 2; g.add(snout);
+        for (const sx of [-1, 1]) {
+          const ear = addSh(new T.Mesh(new T.ConeGeometry(0.06, 0.14, 4), furMat(0xcc5500)));
+          ear.position.set(sx * 0.12, 0.85, 0.1); g.add(ear);
+          const eye = new T.Mesh(new T.SphereGeometry(0.03, 6, 4), new T.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.3 }));
+          eye.position.set(sx * 0.08, 0.68, 0.28); g.add(eye);
+        }
+        const tail = addSh(new T.Mesh(new T.CapsuleGeometry(0.06, 0.3, 6, 8), furMat(0xdd7722)));
+        tail.position.set(0, 0.4, -0.35); tail.rotation.x = -0.5; g.add(tail);
+        const tip = addSh(new T.Mesh(new T.SphereGeometry(0.07, 6, 4), whiteMat()));
+        tip.position.set(0, 0.28, -0.52); g.add(tip);
+        break;
+      }
+      case "crab": {
+        const b = addSh(new T.Mesh(new T.BoxGeometry(0.45, 0.2, 0.35), furMat(0xdd4422)));
+        b.position.y = 0.2; g.add(b);
+        for (const sx of [-1, 1]) {
+          const arm = addSh(new T.Mesh(new T.BoxGeometry(0.25, 0.08, 0.08), furMat(0xdd4422)));
+          arm.position.set(sx * 0.35, 0.25, 0.08); g.add(arm);
+          const claw = addSh(new T.Mesh(new T.BoxGeometry(0.1, 0.12, 0.08), furMat(0xcc3311)));
+          claw.position.set(sx * 0.52, 0.28, 0.08); g.add(claw);
+          const eye = new T.Mesh(new T.SphereGeometry(0.04, 6, 4), eyeMat());
+          eye.position.set(sx * 0.1, 0.38, 0.12); g.add(eye);
+          const stalk = new T.Mesh(new T.CylinderGeometry(0.015, 0.015, 0.1, 4), furMat(0xdd4422));
+          stalk.position.set(sx * 0.1, 0.33, 0.12); g.add(stalk);
+        }
+        for (let i = 0; i < 3; i++) for (const sx of [-1, 1]) {
+          const leg = addSh(new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 0.15, 4), furMat(0xdd4422)));
+          leg.position.set(sx * (0.15 + i * 0.08), 0.08, -0.1 + i * 0.05);
+          leg.rotation.z = sx * 0.6; g.add(leg);
+        }
+        break;
+      }
+      case "goose": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.25, 8, 6), whiteMat()));
+        b.position.y = 0.45; g.add(b);
+        const neck = addSh(new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 0.4, 6), whiteMat()));
+        neck.position.set(0, 0.75, 0.12); neck.rotation.x = 0.3; g.add(neck);
+        const h = addSh(new T.Mesh(new T.SphereGeometry(0.1, 8, 6), whiteMat()));
+        h.position.set(0, 0.95, 0.22); g.add(h);
+        const beak = new T.Mesh(new T.ConeGeometry(0.04, 0.1, 4), furMat(0xff8800));
+        beak.position.set(0, 0.92, 0.32); beak.rotation.x = Math.PI / 2; g.add(beak);
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.025, 6, 4), eyeMat());
+          eye.position.set(sx * 0.06, 0.98, 0.28); g.add(eye);
+          // Angry brow
+          const brow = new T.Mesh(new T.BoxGeometry(0.06, 0.015, 0.01), eyeMat());
+          brow.position.set(sx * 0.06, 1.02, 0.3); brow.rotation.z = sx * -0.4; g.add(brow);
+          const wing = addSh(new T.Mesh(new T.BoxGeometry(0.04, 0.18, 0.2), whiteMat()));
+          wing.position.set(sx * 0.26, 0.48, -0.02); wing.rotation.z = sx * 0.2; g.add(wing);
+        }
+        for (const sx of [-1, 1]) {
+          const foot = addSh(new T.Mesh(new T.BoxGeometry(0.1, 0.02, 0.12), furMat(0xff8800)));
+          foot.position.set(sx * 0.08, 0.02, 0.04); g.add(foot);
+        }
+        break;
+      }
+      case "fish": {
+        const b = addSh(new T.Mesh(new T.SphereGeometry(0.22, 8, 6), furMat(0x4488cc)));
+        b.position.y = 0.6; b.scale.set(1, 0.7, 1.3); g.add(b);
+        const tail = addSh(new T.Mesh(new T.ConeGeometry(0.12, 0.18, 4), furMat(0x3377bb)));
+        tail.position.set(0, 0.6, -0.32); tail.rotation.x = -Math.PI / 2; g.add(tail);
+        for (const sx of [-1, 1]) {
+          const eye = new T.Mesh(new T.SphereGeometry(0.04, 6, 4), whiteMat());
+          eye.position.set(sx * 0.14, 0.65, 0.2); g.add(eye);
+          const pupil = new T.Mesh(new T.SphereGeometry(0.02, 6, 4), eyeMat());
+          pupil.position.set(sx * 0.15, 0.65, 0.23); g.add(pupil);
+          const fin = new T.Mesh(new T.BoxGeometry(0.02, 0.1, 0.1),
+            new T.MeshStandardMaterial({ color: 0x55aadd, transparent: true, opacity: 0.6 }));
+          fin.position.set(sx * 0.2, 0.6, 0); g.add(fin);
+        }
+        const dorsal = new T.Mesh(new T.ConeGeometry(0.06, 0.12, 4),
+          new T.MeshStandardMaterial({ color: 0x55aadd, transparent: true, opacity: 0.6 }));
+        dorsal.position.set(0, 0.82, 0); g.add(dorsal);
+        break;
+      }
+    }
+    return g;
+  }
+
+  /* ================================================================
+     5. WORLD BUILDERS
+     ================================================================ */
+  function setupLighting(warmth) {
+    const amb = new T.AmbientLight(warmth ? 0xffeedd : 0xbbddff, 0.55);
+    scene.add(amb);
+    const sun = new T.DirectionalLight(warmth ? 0xfff5e0 : 0xfff8f0, 1.1);
+    sun.position.set(8, 15, 10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left = -35; sun.shadow.camera.right = 35;
+    sun.shadow.camera.top = 35; sun.shadow.camera.bottom = -35;
+    sun.shadow.camera.near = 1; sun.shadow.camera.far = 60;
+    scene.add(sun);
+    const rim = new T.DirectionalLight(0xffeeff, 0.25);
+    rim.position.set(-5, 8, -8);
+    scene.add(rim);
+  }
+
+  /* ── Trees ── */
+  function makeTree(trunkH, crownR, crownColor) {
+    const g = new T.Group();
+    const trunk = addSh(new T.Mesh(new T.CylinderGeometry(0.15, 0.2, trunkH, 6), furMat(0x886644)));
+    trunk.position.y = trunkH / 2; g.add(trunk);
+    const crown = addSh(new T.Mesh(new T.SphereGeometry(crownR, 8, 6), furMat(crownColor)));
+    crown.position.y = trunkH + crownR * 0.6; g.add(crown);
+    return g;
+  }
+
+  function makeFlower(color) {
+    const g = new T.Group();
+    const stem = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, 0.3, 4), furMat(0x44aa44));
+    stem.position.y = 0.15; g.add(stem);
+    const petal = addSh(new T.Mesh(new T.SphereGeometry(0.08, 6, 4), furMat(color)));
+    petal.position.y = 0.35; g.add(petal);
+    return g;
+  }
+
+  /* ── Hub World ── */
+  const HUB_POIS = {
+    shelter:   { pos: [0, 0, 0],    label: "保護施設（ペット図鑑）", key: "E" },
+    shop:      { pos: [-12, 0, 0],  label: "ショップ", key: "E" },
+    grassland: { pos: [0, 0, 17],   label: "草原エリアへ出発", key: "E" },
+    lakefront: { pos: [0, 0, -17],  label: "湖畔エリアへ出発", key: "E" },
+  };
+
+  function buildHubWorld() {
+    clearScene();
+    setupLighting(true);
+    scene.fog = new T.Fog(0x88ccff, 30, 60);
+    scene.background = new T.Color(0x88ccff);
+
+    // Ground
+    const ground = new T.Mesh(new T.PlaneGeometry(50, 50), new T.MeshStandardMaterial({ color: 0x88cc66, roughness: 0.85 }));
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Path (stone)
+    for (let z = -18; z <= 18; z += 2) {
+      const stone = addSh(new T.Mesh(new T.BoxGeometry(1.2, 0.05, 0.9), furMat(0xccbb99, 0.9)));
+      stone.position.set(0, 0.03, z); scene.add(stone);
+    }
+    for (let x = -12; x <= 0; x += 2) {
+      const stone = addSh(new T.Mesh(new T.BoxGeometry(0.9, 0.05, 1.2), furMat(0xccbb99, 0.9)));
+      stone.position.set(x, 0.03, 0); scene.add(stone);
+    }
+
+    // Shelter building
+    const shelter = new T.Group();
+    const sBody = addSh(new T.Mesh(new T.BoxGeometry(5, 3, 4), furMat(0xffeedd)));
+    sBody.position.y = 1.5; shelter.add(sBody);
+    const sRoof = addSh(new T.Mesh(new T.BoxGeometry(5.8, 0.4, 4.6), furMat(0xee6633)));
+    sRoof.position.y = 3.2; shelter.add(sRoof);
+    const sSign = addSh(new T.Mesh(new T.BoxGeometry(2.5, 0.5, 0.1), furMat(0xff8844)));
+    sSign.position.set(0, 3.6, 2.05); shelter.add(sSign);
+    // Door
+    const door = addSh(new T.Mesh(new T.BoxGeometry(0.9, 1.6, 0.1), furMat(0x885533)));
+    door.position.set(0, 0.8, 2.05); shelter.add(door);
+    // Cross
+    const crossH = addSh(new T.Mesh(new T.BoxGeometry(0.8, 0.15, 0.12), furMat(0xffffff)));
+    crossH.position.set(0, 2.2, 2.1); shelter.add(crossH);
+    const crossV = addSh(new T.Mesh(new T.BoxGeometry(0.15, 0.8, 0.12), furMat(0xffffff)));
+    crossV.position.set(0, 2.2, 2.1); shelter.add(crossV);
+    scene.add(shelter);
+
+    // Shop building
+    const shop = new T.Group();
+    const shBody = addSh(new T.Mesh(new T.BoxGeometry(3.5, 2.5, 3), furMat(0xddeeff)));
+    shBody.position.y = 1.25; shop.add(shBody);
+    const shRoof = addSh(new T.Mesh(new T.BoxGeometry(4, 0.35, 3.5), furMat(0x44aa88)));
+    shRoof.position.y = 2.7; shop.add(shRoof);
+    const shDoor = addSh(new T.Mesh(new T.BoxGeometry(0.8, 1.4, 0.1), furMat(0x885533)));
+    shDoor.position.set(0, 0.7, 1.55); shop.add(shDoor);
+    const shSign = addSh(new T.Mesh(new T.BoxGeometry(1.5, 0.4, 0.1), furMat(0x44aa88)));
+    shSign.position.set(0, 3.0, 1.55); shop.add(shSign);
+    shop.position.set(-12, 0, 0);
+    scene.add(shop);
+
+    // Grassland gate (green arch)
+    const gGate = makeGate(0x44aa44, 0x55cc55);
+    gGate.position.set(0, 0, 17);
+    scene.add(gGate);
+
+    // Lakefront gate (blue arch)
+    const lGate = makeGate(0x4488dd, 0x55aaee);
+    lGate.position.set(0, 0, -17);
+    scene.add(lGate);
+    // Lock barrier
+    if (!save.unlockedWorlds.includes("lakefront")) {
+      const barrier = new T.Mesh(new T.BoxGeometry(3, 3.5, 0.3),
+        new T.MeshStandardMaterial({ color: 0xdd4444, transparent: true, opacity: 0.35 }));
+      barrier.position.set(0, 1.5, -17);
+      barrier.userData.isBarrier = true;
+      scene.add(barrier);
+    }
+
+    // Trees
+    const treePositions = [
+      [6, 5], [-7, 8], [10, -4], [-9, -10], [8, 14], [-6, -15],
+      [14, 10], [-14, 5], [12, -12], [-10, 12], [16, 0], [-16, -8],
+    ];
+    for (const [tx, tz] of treePositions) {
+      const tree = makeTree(1.5 + Math.random() * 1, 1.2 + Math.random() * 0.6, 0x44aa44 + Math.floor(Math.random() * 0x222200));
+      tree.position.set(tx, 0, tz);
+      scene.add(tree);
+    }
+
+    // Flowers
+    const flowerColors = [0xff6688, 0xffaa44, 0xff44aa, 0xffff44, 0xaa66ff];
+    for (let i = 0; i < 25; i++) {
+      const f = makeFlower(flowerColors[i % flowerColors.length]);
+      f.position.set((Math.random() - 0.5) * 36, 0, (Math.random() - 0.5) * 36);
+      scene.add(f);
+    }
+
+    // Benches
+    for (const pos of [[5, 0, 2], [-5, 0, -3]]) {
+      const bench = new T.Group();
+      const seat = addSh(new T.Mesh(new T.BoxGeometry(1.2, 0.08, 0.4), furMat(0x886644)));
+      seat.position.y = 0.4; bench.add(seat);
+      const back = addSh(new T.Mesh(new T.BoxGeometry(1.2, 0.5, 0.06), furMat(0x886644)));
+      back.position.set(0, 0.65, -0.17); bench.add(back);
+      for (const lx of [-0.5, 0.5]) {
+        const leg = addSh(new T.Mesh(new T.BoxGeometry(0.06, 0.4, 0.06), furMat(0x555555)));
+        leg.position.set(lx, 0.2, 0); bench.add(leg);
+      }
+      bench.position.set(...pos);
+      scene.add(bench);
+    }
+  }
+
+  function makeGate(color1, color2) {
+    const g = new T.Group();
+    for (const sx of [-1, 1]) {
+      const pillar = addSh(new T.Mesh(new T.BoxGeometry(0.5, 3.5, 0.5), furMat(color1)));
+      pillar.position.set(sx * 1.5, 1.75, 0); g.add(pillar);
+    }
+    const lintel = addSh(new T.Mesh(new T.BoxGeometry(3.5, 0.5, 0.5), furMat(color2)));
+    lintel.position.y = 3.5; g.add(lintel);
+    // Arrow
+    const arrow = addSh(new T.Mesh(new T.ConeGeometry(0.2, 0.4, 4), furMat(0xffdd44)));
+    arrow.position.set(0, 4.0, 0);
+    arrow.userData.bobble = true;
+    g.add(arrow);
+    return g;
+  }
+
+  /* ── Grassland World ── */
+  function getTerrainY_grassland(x, z) {
+    return Math.sin(x * 0.15) * 1.0 + Math.cos(z * 0.12) * 0.7;
+  }
+
+  function buildFieldWorld(worldId) {
+    clearScene();
+    const isLake = worldId === "lakefront";
+    setupLighting(!isLake);
+    scene.background = new T.Color(isLake ? 0x77bbee : 0x88ccff);
+    scene.fog = new T.Fog(isLake ? 0x77bbee : 0x88ccff, 35, 70);
+
+    // Ground
+    const gSize = 70;
+    const gSeg = 40;
+    const groundGeo = new T.PlaneGeometry(gSize, gSize, gSeg, gSeg);
+    groundGeo.rotateX(-Math.PI / 2);
+    if (!isLake) {
+      const pos = groundGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        pos.setY(i, getTerrainY_grassland(x, z));
+      }
+      groundGeo.computeVertexNormals();
+    }
+    const groundMat = new T.MeshStandardMaterial({ color: isLake ? 0x77aa55 : 0x88cc55, roughness: 0.85 });
+    const ground = new T.Mesh(groundGeo, groundMat);
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Lake water (lakefront only)
+    if (isLake) {
+      const water = new T.Mesh(new T.PlaneGeometry(25, 20),
+        new T.MeshStandardMaterial({ color: 0x3399cc, transparent: true, opacity: 0.7, roughness: 0.2, metalness: 0.1 }));
+      water.rotation.x = -Math.PI / 2;
+      water.position.set(0, 0.02, -5);
+      scene.add(water);
+      // Lily pads
+      for (let i = 0; i < 8; i++) {
+        const lily = new T.Mesh(new T.CylinderGeometry(0.35, 0.35, 0.04, 8),
+          furMat(0x44aa44));
+        lily.position.set((Math.random() - 0.5) * 20, 0.05, -5 + (Math.random() - 0.5) * 16);
+        scene.add(lily);
+      }
+      // Reeds
+      for (let i = 0; i < 15; i++) {
+        const reed = new T.Mesh(new T.CylinderGeometry(0.02, 0.03, 1.5 + Math.random(), 4), furMat(0x668833));
+        reed.position.set((Math.random() - 0.5) * 28, 0.7, -5 + (Math.random() - 0.5) * 22);
+        scene.add(reed);
+      }
+    }
+
+    // Return portal (glowing disc)
+    const portalGeo = new T.CylinderGeometry(1.5, 1.5, 0.1, 16);
+    const portalMat = new T.MeshStandardMaterial({ color: 0x44ddff, emissive: 0x22aacc, emissiveIntensity: 0.6, transparent: true, opacity: 0.7 });
+    const portal = new T.Mesh(portalGeo, portalMat);
+    portal.position.set(0, 0.06, 0);
+    portal.userData.isPortal = true;
+    scene.add(portal);
+    // Portal arrow
+    const pArrow = addSh(new T.Mesh(new T.ConeGeometry(0.3, 0.5, 6), new T.MeshStandardMaterial({ color: 0x44ddff, emissive: 0x22aacc, emissiveIntensity: 0.5 })));
+    pArrow.position.set(0, 2.0, 0);
+    pArrow.userData.bobble = true;
+    scene.add(pArrow);
+
+    // Trees / Decorations
+    const treeCount = isLake ? 12 : 20;
+    for (let i = 0; i < treeCount; i++) {
+      const tx = (Math.random() - 0.5) * 50;
+      const tz = (Math.random() - 0.5) * 50;
+      if (Math.abs(tx) < 3 && Math.abs(tz) < 3) continue; // avoid portal
+      if (isLake && Math.abs(tx) < 13 && tz > -16 && tz < 6) continue; // avoid lake
+      const ty = isLake ? 0 : getTerrainY_grassland(tx, tz);
+      const tree = makeTree(
+        1.2 + Math.random() * 1.5,
+        0.9 + Math.random() * 0.8,
+        isLake ? (0x338844 + Math.floor(Math.random() * 0x112200)) : (0x44aa44 + Math.floor(Math.random() * 0x222200))
+      );
+      tree.position.set(tx, ty, tz);
+      scene.add(tree);
+    }
+
+    // Rocks
+    for (let i = 0; i < 8; i++) {
+      const rx = (Math.random() - 0.5) * 48;
+      const rz = (Math.random() - 0.5) * 48;
+      const ry = isLake ? 0 : getTerrainY_grassland(rx, rz);
+      const rock = addSh(new T.Mesh(new T.SphereGeometry(0.4 + Math.random() * 0.3, 6, 4), furMat(0x999988, 0.9)));
+      rock.position.set(rx, ry + 0.15, rz);
+      rock.scale.set(1, 0.5 + Math.random() * 0.3, 1);
+      scene.add(rock);
+    }
+
+    // Flowers (grassland only)
+    if (!isLake) {
+      const fc = [0xff6688, 0xffaa44, 0xffff44, 0xaa66ff, 0xff44aa];
+      for (let i = 0; i < 35; i++) {
+        const fx = (Math.random() - 0.5) * 50;
+        const fz = (Math.random() - 0.5) * 50;
+        const f = makeFlower(fc[i % fc.length]);
+        f.position.set(fx, getTerrainY_grassland(fx, fz), fz);
+        scene.add(f);
+      }
+    }
+  }
+
+  /* ================================================================
+     6. GAME STATE
+     ================================================================ */
+  let gameState = "title"; // title | hub | field | inventory | shop | result
+  let currentWorld = "hub";
+  let prevState = "hub"; // for overlay return
+
+  /* Player */
+  let player = { x: 0, y: 0, z: 8, facing: 0, mesh: null, speed: 4.0, isKB: false, kbVx: 0, kbVz: 0, kbTimer: 0 };
+
+  /* Camera */
+  let cam = { distance: 12, pitch: 0.45, yaw: Math.PI, targetYaw: Math.PI };
+
+  /* Field state */
+  let rescueNodes = [];
+  let enemies = [];
+  let rescuedThisTrip = [];
+  let rescueState = { active: false, nodeIdx: -1, progress: 0, totalTime: 0, species: "" };
+
+  /* Follow pet */
+  let followPet = { mesh: null, x: 0, z: 0, y: 0, bob: 0 };
+
+  /* Input */
+  const keys = {};
+  let pointerDown = false, pointerX = 0, pointerY = 0, pointerDragging = false;
+  let rescueHeld = false;
+  let joystick = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
+
+  /* Timing */
+  let lastTs = 0, animTime = 0;
+  let toastTimer = 0;
+
+  /* ================================================================
+     7. PLAYER & CAMERA
+     ================================================================ */
+  function getSpeedMult() {
+    return 1 + save.walkSpeedLevel * 0.15;
+  }
+  function getPetBonus() {
+    return save.equippedPetId ? 1.1 : 1.0;
+  }
+
+  const PLAYER_TURN_SPEED = 3.2; // rad/sec
+
+  function updatePlayer(dt) {
+    if (player.isKB) {
+      player.x += player.kbVx * dt;
+      player.z += player.kbVz * dt;
+      player.kbVx *= 0.9;
+      player.kbVz *= 0.9;
+      player.kbTimer -= dt;
+      if (player.kbTimer <= 0) player.isKB = false;
+    } else {
+      // Facing-based controls:
+      // - Left/Right: turn
+      // - Up/Down: move forward/backward relative to facing
+      let turn = 0;
+      if (keys["ArrowLeft"] || keys["KeyA"]) turn -= 1;
+      if (keys["ArrowRight"] || keys["KeyD"]) turn += 1;
+      if (joystick.active) turn += joystick.dx;
+
+      player.facing += turn * PLAYER_TURN_SPEED * dt;
+      // Keep facing bounded for numerical stability
+      while (player.facing > Math.PI) player.facing -= Math.PI * 2;
+      while (player.facing < -Math.PI) player.facing += Math.PI * 2;
+
+      let throttle = 0;
+      if (keys["ArrowUp"] || keys["KeyW"]) throttle += 1;
+      if (keys["ArrowDown"] || keys["KeyS"]) throttle -= 1;
+      if (joystick.active) throttle += joystick.dy; // screen up => forward
+
+      if (throttle > 1) throttle = 1;
+      if (throttle < -1) throttle = -1;
+
+      if (Math.abs(throttle) > 0.01) {
+        const spd = player.speed * getSpeedMult() * getPetBonus() * dt * (-throttle);
+        const fx = Math.sin(player.facing);
+        const fz = Math.cos(player.facing);
+        player.x += fx * spd;
+        player.z += fz * spd;
+      }
+    }
+    // Clamp
+    const bound = WORLD_BOUNDS[currentWorld] || 19;
+    player.x = Math.max(-bound, Math.min(bound, player.x));
+    player.z = Math.max(-bound, Math.min(bound, player.z));
+    // Terrain Y
+    if (currentWorld === "grassland") {
+      player.y = getTerrainY_grassland(player.x, player.z);
+    } else {
+      player.y = 0;
+    }
+    // Sync mesh
+    if (player.mesh) {
+      player.mesh.position.set(player.x, player.y, player.z);
+      player.mesh.rotation.y = player.facing;
+    }
+  }
+
+  function updateCamera(dt) {
+    // Auto-follow yaw behind player
+    cam.targetYaw = player.facing + Math.PI;
+    if (!pointerDragging) {
+      let diff = cam.targetYaw - cam.yaw;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      cam.yaw += diff * 2.5 * dt;
+    }
+    const cx = player.x + Math.sin(cam.yaw) * cam.distance * Math.cos(cam.pitch);
+    const cy = player.y + cam.distance * Math.sin(cam.pitch) + 2;
+    const cz = player.z + Math.cos(cam.yaw) * cam.distance * Math.cos(cam.pitch);
+    camera.position.lerp(new T.Vector3(cx, cy, cz), 0.08);
+    camera.lookAt(player.x, player.y + 1.0, player.z);
+  }
+
+  /* ================================================================
+     8. RESCUE MECHANIC
+     ================================================================ */
+  function spawnRescueNodes(worldId) {
+    rescueNodes = [];
+    const templates = NODE_TEMPLATES[worldId] || [];
+    templates.forEach((t, i) => {
+      const mesh = makeNodeMesh(t.type);
+      const py = worldId === "grassland" ? getTerrainY_grassland(t.pos[0], t.pos[2]) : 0;
+      mesh.position.set(t.pos[0], py, t.pos[2]);
+      scene.add(mesh);
+      rescueNodes.push({
+        idx: i, type: t.type, pets: t.pets,
+        x: t.pos[0], y: py, z: t.pos[2],
+        mesh, cooldown: 0, available: true,
+      });
+    });
+  }
+
+  function updateRescueNodes(dt) {
+    let nearestIdx = -1, nearestDist = Infinity;
+    for (let i = 0; i < rescueNodes.length; i++) {
+      const n = rescueNodes[i];
+      if (n.cooldown > 0) {
+        n.cooldown -= dt;
+        if (n.cooldown <= 0) {
+          n.cooldown = 0; n.available = true;
+          n.mesh.visible = true;
+          n.mesh.traverse(o => { if (o.material) o.material.opacity = 1; });
+        }
+      }
+      if (!n.available) continue;
+      const d = Math.hypot(player.x - n.x, player.z - n.z);
+      if (d < RESCUE_DIST && d < nearestDist) { nearestIdx = i; nearestDist = d; }
+      // Bobbing
+      n.mesh.position.y = n.y + Math.sin(animTime * 2 + i) * 0.08;
+    }
+
+    // Show prompt
+    if (nearestIdx >= 0 && !rescueState.active) {
+      el.prompt.textContent = "Space 長押しでレスキュー！";
+      el.prompt.classList.remove("hidden");
+      el.btnRescueMobile.classList.add("show");
+    } else if (!rescueState.active) {
+      el.prompt.classList.add("hidden");
+      el.btnRescueMobile.classList.remove("show");
+    }
+
+    // Rescue progress
+    if (rescueHeld && nearestIdx >= 0 && !player.isKB) {
+      if (!rescueState.active) {
+        const n = rescueNodes[nearestIdx];
+        const sp = n.pets[Math.floor(Math.random() * n.pets.length)];
+        const def = PET_DEFS[sp];
+        rescueState.active = true;
+        rescueState.nodeIdx = nearestIdx;
+        rescueState.progress = 0;
+        rescueState.totalTime = Math.max(1.0, def.baseTime - save.toolLevel * 0.3);
+        rescueState.species = sp;
+        el.rescueLabel.textContent = "レスキュー中... " + def.nameJa;
+        el.rescueWrap.classList.remove("hidden");
+      }
+      if (rescueState.active && rescueState.nodeIdx === nearestIdx) {
+        rescueState.progress += dt / rescueState.totalTime;
+        el.rescueFill.style.width = Math.min(100, rescueState.progress * 100) + "%";
+        if (rescueState.progress >= 1) completeRescue();
+      }
+    } else if (rescueState.active) {
+      // Check if still near node
+      if (nearestIdx !== rescueState.nodeIdx) cancelRescue();
+    }
+    if (!rescueHeld && rescueState.active) cancelRescue();
+  }
+
+  function completeRescue() {
+    const n = rescueNodes[rescueState.nodeIdx];
+    const sp = rescueState.species;
+    const def = PET_DEFS[sp];
+    // Roll rarity
+    const roll = Math.random() * 100;
+    let cum = 0, rarity = "common";
+    for (let i = 0; i < 4; i++) {
+      cum += def.weights[i];
+      if (roll < cum) { rarity = RARITY_KEYS[i]; break; }
+    }
+    const pet = { id: sp + "_" + Date.now() + "_" + Math.floor(Math.random() * 1000), species: sp, rarity, world: currentWorld };
+    rescuedThisTrip.push(pet);
+
+    // Node cooldown
+    n.available = false;
+    n.cooldown = RESPAWN_SEC;
+    n.mesh.visible = false;
+
+    cancelRescue();
+    showToast(def.nameJa + "（" + RARITY[rarity].label + "）を救出！", rarity === "epic" ? "#cc55ff" : rarity === "rare" ? "#5588ff" : "#44bb66");
+    updateHUD();
+  }
+
+  function cancelRescue() {
+    rescueState.active = false;
+    rescueState.progress = 0;
+    rescueState.nodeIdx = -1;
+    el.rescueWrap.classList.add("hidden");
+    el.rescueFill.style.width = "0%";
+  }
+
+  /* ================================================================
+     9. ENEMY SYSTEM
+     ================================================================ */
+  function spawnEnemies(worldId) {
+    enemies = [];
+    const defs = ENEMY_DEFS[worldId] || [];
+    defs.forEach((d, i) => {
+      const mesh = makeEnemyMesh(d.kind);
+      const ey = worldId === "grassland" ? getTerrainY_grassland(d.home[0], d.home[2]) : 0;
+      mesh.position.set(d.home[0], ey, d.home[2]);
+      scene.add(mesh);
+      enemies.push({
+        kind: d.kind, speed: d.speed, radius: d.radius,
+        hx: d.home[0], hz: d.home[2],
+        x: d.home[0], z: d.home[2], y: ey,
+        angle: Math.random() * Math.PI * 2,
+        mesh, chasing: false,
+      });
+    });
+  }
+
+  function updateEnemies(dt) {
+    for (const e of enemies) {
+      const dx = player.x - e.x, dz = player.z - e.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      e.chasing = dist < e.radius * 1.3;
+      let tx, tz;
+      if (e.chasing) {
+        tx = e.x + (dx / dist) * e.speed * 1.3 * dt;
+        tz = e.z + (dz / dist) * e.speed * 1.3 * dt;
+      } else {
+        e.angle += e.speed * 0.4 * dt;
+        tx = e.hx + Math.cos(e.angle) * e.radius * 0.6;
+        tz = e.hz + Math.sin(e.angle) * e.radius * 0.6;
+      }
+      e.x += (tx - e.x) * 3 * dt;
+      e.z += (tz - e.z) * 3 * dt;
+      e.y = currentWorld === "grassland" ? getTerrainY_grassland(e.x, e.z) : 0;
+
+      // Hit player
+      const hitDist = Math.hypot(player.x - e.x, player.z - e.z);
+      if (hitDist < ENEMY_HIT_DIST && !player.isKB) {
+        const nx = (player.x - e.x) / (hitDist + 0.01);
+        const nz = (player.z - e.z) / (hitDist + 0.01);
+        player.isKB = true;
+        player.kbVx = nx * 12;
+        player.kbVz = nz * 12;
+        player.kbTimer = KNOCKBACK_DUR;
+        if (rescueState.active) cancelRescue();
+      }
+
+      e.mesh.position.set(e.x, e.y, e.z);
+      if (e.chasing) e.mesh.rotation.y = Math.atan2(dx, dz);
+      else e.mesh.rotation.y = e.angle;
+    }
+  }
+
+  /* ================================================================
+     10. PET FOLLOW
+     ================================================================ */
+  function spawnFollowPet() {
+    despawnFollowPet();
+    if (!save.equippedPetId) return;
+    const pet = save.ownedPets.find(p => p.id === save.equippedPetId);
+    if (!pet) { save.equippedPetId = null; return; }
+    const mesh = makeAnimal(pet.species);
+    applyRarity(mesh, pet.rarity);
+    mesh.scale.setScalar(0.75);
+    scene.add(mesh);
+    followPet.mesh = mesh;
+    followPet.x = player.x - 2;
+    followPet.z = player.z;
+    followPet.y = player.y;
+    followPet.bob = 0;
+  }
+
+  function despawnFollowPet() {
+    if (followPet.mesh) {
+      scene.remove(followPet.mesh);
+      followPet.mesh.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+          else o.material.dispose();
+        }
+      });
+      followPet.mesh = null;
+    }
+  }
+
+  function updateFollowPet(dt) {
+    if (!followPet.mesh) return;
+    const behind = player.facing + Math.PI;
+    const tx = player.x + Math.sin(behind) * 2 + Math.sin(behind + Math.PI / 2) * 0.5;
+    const tz = player.z + Math.cos(behind) * 2 + Math.cos(behind + Math.PI / 2) * 0.5;
+    followPet.x += (tx - followPet.x) * 3.5 * dt;
+    followPet.z += (tz - followPet.z) * 3.5 * dt;
+    const ty = currentWorld === "grassland" ? getTerrainY_grassland(followPet.x, followPet.z) : 0;
+    followPet.y += (ty - followPet.y) * 5 * dt;
+    followPet.bob += dt * 3;
+    followPet.mesh.position.set(followPet.x, followPet.y + Math.sin(followPet.bob) * 0.12, followPet.z);
+    followPet.mesh.rotation.y = Math.atan2(player.x - followPet.x, player.z - followPet.z);
+    // Sparkle animation
+    followPet.mesh.traverse(o => {
+      if (o.userData.sparkle) {
+        const p = o.userData.sparklePhase + animTime * 2;
+        o.position.x = Math.cos(p) * 0.5;
+        o.position.z = Math.sin(p) * 0.5;
+      }
+    });
+  }
+
+  /* ================================================================
+     11. HUB INTERACTIONS
+     ================================================================ */
+  function checkHubInteractions() {
+    let nearest = null, nearestDist = Infinity;
+    for (const [key, poi] of Object.entries(HUB_POIS)) {
+      const d = Math.hypot(player.x - poi.pos[0], player.z - poi.pos[2]);
+      if (d < HUB_INTERACT_DIST && d < nearestDist) {
+        // Check lakefront lock
+        if (key === "lakefront" && !save.unlockedWorlds.includes("lakefront")) {
+          nearest = { key, label: "（ロック中 - 10匹救助 or ショップで解放）", locked: true };
+        } else {
+          nearest = { key, label: poi.label, locked: false };
+        }
+        nearestDist = d;
+      }
+    }
+    if (nearest) {
+      el.prompt.textContent = nearest.locked ? nearest.label : "[E] " + nearest.label;
+      el.prompt.classList.remove("hidden");
+    } else {
+      el.prompt.classList.add("hidden");
+    }
+    return nearest;
+  }
+
+  function handleHubInteract() {
+    const poi = checkHubInteractions();
+    if (!poi || poi.locked) return;
+    switch (poi.key) {
+      case "shelter": openInventory(); break;
+      case "shop": openShop(); break;
+      case "grassland": enterField("grassland"); break;
+      case "lakefront": enterField("lakefront"); break;
+    }
+  }
+
+  /* ================================================================
+     12. WORLD TRANSITIONS
+     ================================================================ */
+  function enterHub() {
+    currentWorld = "hub";
+    gameState = "hub";
+    buildHubWorld();
+    player.x = 0; player.z = 8; player.y = 0; player.facing = 0;
+    player.mesh = makePlayer();
+    scene.add(player.mesh);
+    spawnFollowPet();
+    cam.yaw = Math.PI; cam.targetYaw = Math.PI;
+    camera.position.set(0, 12, 20);
+    showHUD("Hub");
+  }
+
+  function enterField(worldId) {
+    el.fade.style.opacity = "1";
+    setTimeout(() => {
+      currentWorld = worldId;
+      gameState = "field";
+      rescuedThisTrip = [];
+      cancelRescue();
+      buildFieldWorld(worldId);
+      player.x = 0; player.z = 3; player.y = currentWorld === "grassland" ? getTerrainY_grassland(0, 3) : 0;
+      player.facing = 0;
+      player.mesh = makePlayer();
+      scene.add(player.mesh);
+      spawnRescueNodes(worldId);
+      spawnEnemies(worldId);
+      spawnFollowPet();
+      cam.yaw = Math.PI; cam.targetYaw = Math.PI;
+      showHUD(worldId === "grassland" ? "草原" : "湖畔");
+      el.btnBackHub.style.display = "block";
+      setTimeout(() => { el.fade.style.opacity = "0"; }, 50);
+    }, 280);
+  }
+
+  function returnToHub() {
+    if (rescuedThisTrip.length > 0) {
+      showResult();
+    } else {
+      el.fade.style.opacity = "1";
+      setTimeout(() => {
+        enterHub();
+        setTimeout(() => { el.fade.style.opacity = "0"; }, 50);
+      }, 280);
+    }
+  }
+
+  function checkReturnPortal() {
+    const d = Math.hypot(player.x, player.z);
+    if (d < PORTAL_DIST) {
+      el.prompt.textContent = "[E] 拠点へ帰る";
+      el.prompt.classList.remove("hidden");
+    }
+  }
+
+  /* ================================================================
+     13. UI
+     ================================================================ */
+  function showScreen(id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
+    const s = document.getElementById("screen-" + id);
+    if (s) s.classList.remove("hidden");
+  }
+  function hideAllScreens() {
+    document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
+  }
+
+  function showHUD(worldLabel) {
+    el.hud.classList.remove("hidden");
+    el.hudWorld.textContent = worldLabel;
+    el.btnBackHub.style.display = currentWorld === "hub" ? "none" : "block";
+    if (window.innerWidth <= 480) el.mobileCtrl.classList.remove("hidden");
+    updateHUD();
+  }
+
+  function updateHUD() {
+    el.hudCoins.textContent = "\u{1FA99} " + save.coins;
+    el.hudRescued.textContent = "\u{1F43E} " + (gameState === "field" ? rescuedThisTrip.length + " 救助" : save.totalRescued + " 総救助");
+    el.hudRank.textContent = "Rank " + save.rescueRank;
+  }
+
+  function showToast(msg, bg) {
+    el.toast.textContent = msg;
+    el.toast.style.background = bg || "rgba(68,187,102,0.95)";
+    el.toast.classList.add("show");
+    toastTimer = 2.0;
+  }
+
+  /* ── Inventory ── */
+  function openInventory() {
+    prevState = gameState;
+    gameState = "inventory";
+    showScreen("inventory");
+    renderInventory();
+  }
+
+  function renderInventory() {
+    el.invGrid.innerHTML = "";
+    if (save.equippedPetId) {
+      const ep = save.ownedPets.find(p => p.id === save.equippedPetId);
+      el.invEquipped.textContent = ep ? "装備中: " + PET_DEFS[ep.species].emoji + " " + PET_DEFS[ep.species].nameJa : "";
+    } else {
+      el.invEquipped.textContent = "装備中: なし";
+    }
+    if (save.ownedPets.length === 0) {
+      el.invGrid.innerHTML = '<div class="empty-msg">まだペットがいません。フィールドで救助しよう！</div>';
+      return;
+    }
+    for (const pet of save.ownedPets) {
+      const def = PET_DEFS[pet.species];
+      const r = RARITY[pet.rarity];
+      const card = document.createElement("div");
+      card.className = "pet-card";
+      const isEquipped = save.equippedPetId === pet.id;
+      card.innerHTML = `
+        <div class="pet-icon">${def.emoji}</div>
+        <div class="pet-name">${def.nameJa}</div>
+        <span class="rarity-badge" style="background:${r.css}">${r.label}</span>
+        <button class="btn btn-sm ${isEquipped ? "btn-secondary" : "btn-ok"}" data-pet-id="${pet.id}">
+          ${isEquipped ? "はずす" : "装備"}
+        </button>
+      `;
+      card.querySelector("button").addEventListener("click", () => {
+        if (save.equippedPetId === pet.id) {
+          save.equippedPetId = null;
+        } else {
+          save.equippedPetId = pet.id;
+        }
+        saveSave();
+        renderInventory();
+      });
+      el.invGrid.appendChild(card);
+    }
+  }
+
+  /* ── Shop ── */
+  function openShop() {
+    prevState = gameState;
+    gameState = "shop";
+    showScreen("shop");
+    renderShop();
+  }
+
+  function renderShop() {
+    el.shopCoins.textContent = "\u{1FA99} " + save.coins + " コイン";
+    el.shopList.innerHTML = "";
+    for (const item of SHOP_ITEMS) {
+      // Lakefront one-time check
+      if (item.oneTime && save.unlockedWorlds.includes("lakefront")) continue;
+      // Check if auto-unlocked
+      if (item.id === "lakefront" && save.totalRescued >= 10) {
+        if (!save.unlockedWorlds.includes("lakefront")) {
+          save.unlockedWorlds.push("lakefront");
+          saveSave();
+        }
+        continue;
+      }
+      const level = item.field ? save[item.field] : 0;
+      const maxed = item.field ? level >= item.max : false;
+      const cost = item.cost(level);
+      const canBuy = save.coins >= cost && !maxed;
+      const row = document.createElement("div");
+      row.className = "shop-row";
+      row.innerHTML = `
+        <div class="shop-info">
+          <div class="shop-name">${item.nameJa}${item.field ? " Lv" + level : ""}</div>
+          <div class="shop-desc">${item.descJa}</div>
+        </div>
+        <button class="btn btn-sm ${canBuy ? "btn-primary" : "btn-disabled"}">
+          ${maxed ? "MAX" : cost + " \u{1FA99}"}
+        </button>
+      `;
+      if (canBuy) {
+        row.querySelector("button").addEventListener("click", () => {
+          save.coins -= cost;
+          if (item.field) {
+            save[item.field] += item.step || 1;
+          }
+          if (item.id === "lakefront") {
+            save.unlockedWorlds.push("lakefront");
+          }
+          saveSave();
+          renderShop();
+          updateHUD();
+        });
+      }
+      el.shopList.appendChild(row);
+    }
+  }
+
+  /* ── Result ── */
+  function showResult() {
+    gameState = "result";
+    showScreen("result");
+    el.resultPets.innerHTML = "";
+    let totalCoins = 0;
+    for (const pet of rescuedThisTrip) {
+      const def = PET_DEFS[pet.species];
+      const r = RARITY[pet.rarity];
+      const coins = Math.floor(def.baseCoins * r.mult);
+      totalCoins += coins;
+      save.ownedPets.push(pet);
+      const row = document.createElement("div");
+      row.className = "result-row";
+      row.innerHTML = `
+        <div class="result-icon">${def.emoji}</div>
+        <div class="result-info">
+          <div style="font-weight:700">${def.nameJa}</div>
+          <span class="rarity-badge" style="background:${r.css}">${r.label}</span>
+        </div>
+        <div class="result-coins">+${coins} \u{1FA99}</div>
+      `;
+      el.resultPets.appendChild(row);
+    }
+    save.coins += totalCoins;
+    save.totalRescued += rescuedThisTrip.length;
+    save.rescueXP += rescuedThisTrip.length * 10;
+    // Rank up
+    let rankUp = false;
+    while (save.rescueXP >= save.rescueRank * 100) {
+      save.rescueXP -= save.rescueRank * 100;
+      save.rescueRank++;
+      rankUp = true;
+    }
+    // Auto-unlock lakefront
+    if (save.totalRescued >= 10 && !save.unlockedWorlds.includes("lakefront")) {
+      save.unlockedWorlds.push("lakefront");
+      showToast("湖畔エリアが解放されました！", "#44aadd");
+    }
+    saveSave();
+    let summary = `+${totalCoins} コイン / ${rescuedThisTrip.length}匹 救助`;
+    if (rankUp) summary += " / Rank UP! → " + save.rescueRank;
+    el.resultSummary.textContent = summary;
+    rescuedThisTrip = [];
+  }
+
+  /* ================================================================
+     14. GAME LOOP
+     ================================================================ */
+  function loop(ts) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (ts - lastTs) / 1000);
+    lastTs = ts;
+    animTime += dt;
+
+    // Toast timer
+    if (toastTimer > 0) {
+      toastTimer -= dt;
+      if (toastTimer <= 0) el.toast.classList.remove("show");
+    }
+
+    if (gameState === "hub" || gameState === "field") {
+      updatePlayer(dt);
+      updateCamera(dt);
+      updateFollowPet(dt);
+
+      if (gameState === "hub") {
+        checkHubInteractions();
+      }
+      if (gameState === "field") {
+        updateRescueNodes(dt);
+        updateEnemies(dt);
+        // Check portal
+        const pd = Math.hypot(player.x, player.z);
+        if (pd < PORTAL_DIST && !rescueState.active) {
+          if (rescuedThisTrip.length > 0) {
+            el.prompt.textContent = "[E] 拠点へ帰る（" + rescuedThisTrip.length + "匹）";
+            el.prompt.classList.remove("hidden");
+          }
+        }
+      }
+
+      // Animate bobble objects
+      scene.traverse(o => {
+        if (o.userData.bobble) {
+          o.position.y = (o.userData.baseY || o.position.y) + Math.sin(animTime * 3) * 0.15;
+          if (!o.userData.baseY) o.userData.baseY = o.position.y;
+        }
+      });
+
+      renderer.render(scene, camera);
+    }
+  }
+
+  /* ================================================================
+     15. INPUT HANDLING
+     ================================================================ */
+  window.addEventListener("keydown", e => {
+    keys[e.code] = true;
+    if (e.code === "KeyE" || e.code === "Space") {
+      if (gameState === "hub") handleHubInteract();
+      if (gameState === "field" && e.code === "KeyE") {
+        const pd = Math.hypot(player.x, player.z);
+        if (pd < PORTAL_DIST) returnToHub();
+      }
+      if (e.code === "Space") { rescueHeld = true; e.preventDefault(); }
+    }
+  });
+  window.addEventListener("keyup", e => {
+    keys[e.code] = false;
+    if (e.code === "Space") rescueHeld = false;
+  });
+
+  // Mouse for camera
+  el.gameView.addEventListener("mousedown", e => {
+    if (e.button === 2 || e.button === 0) {
+      pointerDown = true; pointerX = e.clientX; pointerY = e.clientY; pointerDragging = false;
+    }
+  });
+  window.addEventListener("mousemove", e => {
+    if (!pointerDown) return;
+    const dx = e.clientX - pointerX;
+    if (Math.abs(dx) > 3) pointerDragging = true;
+    if (pointerDragging) {
+      cam.yaw -= dx * 0.005;
+      // Mouse turn: rotate player with camera while dragging
+      if ((gameState === "hub" || gameState === "field") && !player.isKB) {
+        player.facing = cam.yaw - Math.PI;
+        while (player.facing > Math.PI) player.facing -= Math.PI * 2;
+        while (player.facing < -Math.PI) player.facing += Math.PI * 2;
+      }
+      pointerX = e.clientX; pointerY = e.clientY;
+    }
+  });
+  window.addEventListener("mouseup", () => {
+    pointerDown = false;
+    setTimeout(() => { pointerDragging = false; }, 100);
+  });
+  el.gameView.addEventListener("wheel", e => {
+    cam.distance = Math.max(5, Math.min(22, cam.distance + e.deltaY * 0.01));
+    e.preventDefault();
+  }, { passive: false });
+  el.gameView.addEventListener("contextmenu", e => e.preventDefault());
+
+  /* ── Mobile Touch ── */
+  el.joystickArea.addEventListener("touchstart", e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    joystick.active = true;
+    joystick.id = t.identifier;
+    const rect = el.joystickArea.getBoundingClientRect();
+    joystick.ox = rect.left + rect.width / 2;
+    joystick.oy = rect.top + rect.height / 2;
+    joystick.dx = 0; joystick.dy = 0;
+  }, { passive: false });
+  window.addEventListener("touchmove", e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joystick.id) {
+        const dx = (t.clientX - joystick.ox) / 50;
+        const dy = (t.clientY - joystick.oy) / 50;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        joystick.dx = len > 1 ? dx / len : dx;
+        joystick.dy = len > 1 ? dy / len : dy;
+        const knobX = joystick.dx * 30;
+        const knobY = joystick.dy * 30;
+        el.joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+      }
+    }
+  }, { passive: false });
+  window.addEventListener("touchend", e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joystick.id) {
+        joystick.active = false; joystick.id = null;
+        joystick.dx = 0; joystick.dy = 0;
+        el.joystickKnob.style.transform = "translate(-50%, -50%)";
+      }
+    }
+  });
+
+  // Mobile rescue button
+  el.btnRescueMobile.addEventListener("touchstart", e => { e.preventDefault(); rescueHeld = true; }, { passive: false });
+  el.btnRescueMobile.addEventListener("touchend", e => { e.preventDefault(); rescueHeld = false; }, { passive: false });
+
+  /* ================================================================
+     16. BUTTON WIRING
+     ================================================================ */
+  document.getElementById("btn-start").addEventListener("click", () => {
+    hideAllScreens();
+    initRenderer();
+    enterHub();
+    requestAnimationFrame(loop);
+  });
+
+  document.getElementById("btn-inv-close").addEventListener("click", () => {
+    hideAllScreens();
+    gameState = prevState;
+    if (gameState === "hub" || gameState === "field") {
+      // Respawn follow pet if changed
+      spawnFollowPet();
+      showHUD(currentWorld === "hub" ? "Hub" : currentWorld === "grassland" ? "草原" : "湖畔");
+    }
+  });
+
+  document.getElementById("btn-shop-close").addEventListener("click", () => {
+    hideAllScreens();
+    gameState = prevState;
+    if (gameState === "hub" || gameState === "field") {
+      showHUD(currentWorld === "hub" ? "Hub" : currentWorld === "grassland" ? "草原" : "湖畔");
+    }
+  });
+
+  document.getElementById("btn-result-ok").addEventListener("click", () => {
+    hideAllScreens();
+    el.fade.style.opacity = "1";
+    setTimeout(() => {
+      enterHub();
+      setTimeout(() => { el.fade.style.opacity = "0"; }, 50);
+    }, 280);
+  });
+
+  el.btnBackHub.addEventListener("click", () => {
+    returnToHub();
+  });
+
+})();
+</script>
+</body>
+</html>

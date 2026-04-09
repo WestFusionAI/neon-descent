@@ -8,6 +8,61 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+  <script>
+  (function () {
+    "use strict";
+
+    // 通常アクセスはシューティングへ即遷移。
+    // 既存のQR（URLを変えない）でも判定できるように、以下のいずれかでQR扱いにする。
+    // - URL パラメータで明示（例: ?qr=1 / ?src=qr / ?utm_source=qr）
+    // - スマホ端末っぽく、かつリファラが空（QRスキャン/外部アプリ経由で起きやすい）
+    const params = new URLSearchParams(window.location.search || "");
+
+    const explicitQr =
+      params.get("qr") === "1" ||
+      params.get("src") === "qr" ||
+      params.get("utm_source") === "qr";
+
+    const ua = (navigator.userAgent || "").toLowerCase();
+    const isMobile = /iphone|ipad|ipod|android/.test(ua);
+
+    let refIsSameOrigin = false;
+    if (document.referrer) {
+      try {
+        refIsSameOrigin = new URL(document.referrer).origin === window.location.origin;
+      } catch (_) {
+        refIsSameOrigin = false;
+      }
+    }
+    const likelyQr = isMobile && !document.referrer;
+
+    const fromQr = explicitQr || likelyQr;
+
+    if (!fromQr) {
+      window.location.replace("games/20260321_neon-descent/index.html");
+      return;
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const h1 = document.querySelector("main h1");
+      const lead = document.querySelector("main .lead");
+      if (h1) h1.textContent = "NEON DESCENT";
+      if (lead) {
+        lead.innerHTML =
+          "QRコードからアクセスされています。<br />" +
+          "下のボタンでシューティングを開始できます。";
+      }
+
+      const a = document.querySelector('a.card[href="games/20260321_neon-descent/index.html"]');
+      if (a) {
+        const strong = a.querySelector("strong");
+        const desc = a.querySelector(".desc");
+        if (strong) strong.textContent = "PLAY";
+        if (desc) desc.textContent = "タップして開始";
+      }
+    });
+  })();
+  </script>
   <style>
     :root {
       --bg: #06060f;
@@ -88,18 +143,24 @@
           <span class="desc">Canvas シューティング（PWA 対応）</span>
         </a>
       </li>
-      <li>
-        <a class="card" href="games/20260324_pal-kun-nigero/index.html">
-          <strong>パルくんのにげろ！（デモ）</strong>
-          <span class="desc">3D 屋上パルクール・矢印パッドで加速・ゾンビから逃げる</span>
-        </a>
-      </li>
-      <li>
-        <a class="card" href="games/20260405_work-in-progress/index.html">
-          <strong>ディザスター・ペット・レスキュー（デモ）</strong>
-          <span class="desc">救出アクション×育成 · リスク％・拠点・ショップ</span>
-        </a>
-      </li>
+
+      <!--
+        ほかのゲーム（後で戻せるように表示だけ外しています）
+
+        <li>
+          <a class="card" href="games/20260324_pal-kun-nigero/index.html">
+            <strong>パルくんのにげろ！（デモ）</strong>
+            <span class="desc">3D 屋上パルクール・矢印パッドで加速・ゾンビから逃げる</span>
+          </a>
+        </li>
+
+        <li>
+          <a class="card" href="games/20260405_work-in-progress/index.html">
+            <strong>ディザスター・ペット・レスキュー（デモ）</strong>
+            <span class="desc">救出アクション×育成 · リスク％・拠点・ショップ</span>
+          </a>
+        </li>
+      -->
     </ul>
   </main>
 </body>

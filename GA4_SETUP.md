@@ -86,7 +86,26 @@ GA4 は **ページのURL（クエリ付き）** を記録します。
 
 ---
 
+## 8. クリア率など（カスタムイベント）
+
+`index.html` から次のイベントが送られます（`gtag` がブロックされていなければ）。
+
+| イベント名 | タイミング |
+|------------|------------|
+| `nd_game_start` | START で本番プレイが始まったとき（分母に使える） |
+| `nd_game_over` | ゲームオーバーになったとき |
+| `nd_all_clear` | 全ステージクリア（本記録のみ。`?demo=ending` のデモでは送らない） |
+
+主なパラメータ: `from_card`（`yes` / `no`）、`demo_query`（URL にエンディングデモ用クエリがあるとき `yes`）、`enemy_bullet_tier`、`final_score`。
+
+**クリア率の見方（例）:** GA4 の **探索** → **自由形式** などで、イベント名 `nd_game_start` のイベント数を分母、`nd_all_clear` を分子として比較する。本番のみに絞るときは `demo_query` が `no` の行だけをフィルタする。
+
+イベントパラメータをディメンションとして常に使う場合は、GA4 **管理** → **カスタム定義** で各パラメータを登録する（登録後、データが溜まり始めてから探索に出る）。
+
+---
+
 ## 関連リンク（このプロジェクト）
 
 - 公開URL: `https://westfusionai.github.io/neon-descent/`
 - 名刺用URL: `https://westfusionai.github.io/neon-descent/?from=card`
+- エンディングデモ: `?demo=ending` または `?ending=demo`（上記URLの末尾に追加）

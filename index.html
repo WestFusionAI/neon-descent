@@ -13,9 +13,8 @@
     "use strict";
 
     // 通常アクセスはシューティングへ即遷移。
-    // 既存のQR（URLを変えない）でも判定できるように、以下のいずれかでQR扱いにする。
-    // - URL パラメータで明示（例: ?qr=1 / ?src=qr / ?utm_source=qr）
-    // - スマホ端末っぽく、かつリファラが空（QRスキャン/外部アプリ経由で起きやすい）
+    // QR から来た場合は「ゲーム側に用意済みのQR用オープニング」へ遷移させる。
+    // （NEON DESCENT 側の from=card / ref=card 判定に合わせる）
     const params = new URLSearchParams(window.location.search || "");
 
     const explicitQr =
@@ -26,41 +25,20 @@
     const ua = (navigator.userAgent || "").toLowerCase();
     const isMobile = /iphone|ipad|ipod|android/.test(ua);
 
-    let refIsSameOrigin = false;
-    if (document.referrer) {
-      try {
-        refIsSameOrigin = new URL(document.referrer).origin === window.location.origin;
-      } catch (_) {
-        refIsSameOrigin = false;
-      }
-    }
     const likelyQr = isMobile && !document.referrer;
 
     const fromQr = explicitQr || likelyQr;
 
-    if (!fromQr) {
-      window.location.replace("games/20260321_neon-descent/index.html");
-      return;
-    }
+    const forwarded = new URLSearchParams(params);
+    // QR判定用のクエリはゲームへ渡さない（必要なら from=card に統一）
+    forwarded.delete("qr");
+    forwarded.delete("src");
+    forwarded.delete("utm_source");
+    if (fromQr) forwarded.set("from", "card");
 
-    window.addEventListener("DOMContentLoaded", () => {
-      const h1 = document.querySelector("main h1");
-      const lead = document.querySelector("main .lead");
-      if (h1) h1.textContent = "NEON DESCENT";
-      if (lead) {
-        lead.innerHTML =
-          "QRコードからアクセスされています。<br />" +
-          "下のボタンでシューティングを開始できます。";
-      }
-
-      const a = document.querySelector('a.card[href="games/20260321_neon-descent/index.html"]');
-      if (a) {
-        const strong = a.querySelector("strong");
-        const desc = a.querySelector(".desc");
-        if (strong) strong.textContent = "PLAY";
-        if (desc) desc.textContent = "タップして開始";
-      }
-    });
+    const q = forwarded.toString();
+    const dest = "games/20260321_neon-descent/index.html" + (q ? "?" + q : "");
+    window.location.replace(dest);
   })();
   </script>
   <style>

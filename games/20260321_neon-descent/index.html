@@ -147,6 +147,36 @@
       transition: opacity 0.35s ease;
     }
     #overlay.hidden { opacity: 0; pointer-events: none; }
+    /* QR/名刺（from=card）経由は情報量が多いので、スマホでは押しやすさ優先でスクロール＆ボタン固定 */
+    @media (max-width: 768px) {
+      #overlay.from-card {
+        justify-content: flex-start;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px 14px max(16px, env(safe-area-inset-bottom));
+      }
+      #overlay.from-card h1 {
+        margin-top: max(6px, env(safe-area-inset-top));
+        margin-bottom: 6px;
+      }
+      #overlay.from-card #sub {
+        margin-bottom: 14px;
+      }
+      #overlay.from-card .keys,
+      #overlay.from-card .keys-mobile {
+        margin-bottom: 12px;
+      }
+      #overlay.from-card #difficulty-row,
+      #overlay.from-card #sens-row {
+        margin-bottom: 12px;
+      }
+      #overlay.from-card #btn-start {
+        position: sticky;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        margin-top: 10px;
+        margin-bottom: 4px;
+      }
+    }
     #overlay h1 {
       font-family: "Orbitron", sans-serif;
       font-weight: 900;
@@ -1001,6 +1031,8 @@
       state === "title" &&
       !overlay.classList.contains("hidden");
     cardVisitorNotice.classList.toggle("hidden", !show);
+    // Layout hint class (mobile usability)
+    overlay.classList.toggle("from-card", isFromBusinessCard());
   }
 
   function showExitOverlayButton(show) {

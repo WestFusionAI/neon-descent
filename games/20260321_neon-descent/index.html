@@ -2,14 +2,37 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-G26ZF634RB"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag("js", new Date());
-  gtag("config", "G-G26ZF634RB");
-</script>
+  <!-- GA4 is loaded only for explicitly tagged (QR) visits -->
+  <script>
+    (function () {
+      try {
+        var params = new URLSearchParams(location.search);
+        // Put this on your QR code URL: ?from=qr  (or utm_medium=qr)
+        var isQr =
+          params.get("from") === "qr" ||
+          params.get("utm_medium") === "qr" ||
+          params.get("utm_source") === "qr";
+
+        if (!isQr) return;
+
+        window.dataLayer = window.dataLayer || [];
+        function gtag() {
+          dataLayer.push(arguments);
+        }
+        window.gtag = gtag;
+        gtag("js", new Date());
+
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "https://www.googletagmanager.com/gtag/js?id=G-G26ZF634RB";
+        document.head.appendChild(s);
+
+        gtag("config", "G-G26ZF634RB", { send_page_view: true });
+      } catch (_) {
+        // If anything goes wrong, fail closed (no analytics).
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#050510" />
   <title>NEON DESCENT — シューティング</title>

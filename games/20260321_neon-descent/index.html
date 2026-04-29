@@ -7,9 +7,11 @@
     (function () {
       try {
         var params = new URLSearchParams(location.search);
-        // Put this on your QR code URL: ?from=qr  (or utm_medium=qr)
+        // Put this on your QR code URL: ?from=qr / ?from=card / utm_*=qr
+        var fromVal = (params.get("from") || "").toLowerCase();
         var isQr =
-          params.get("from") === "qr" ||
+          fromVal === "qr" ||
+          fromVal === "card" ||
           params.get("utm_medium") === "qr" ||
           params.get("utm_source") === "qr";
 
